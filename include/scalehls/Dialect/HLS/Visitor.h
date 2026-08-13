@@ -58,7 +58,7 @@ public:
             // Float binary expressions.
             arith::CmpFOp, arith::AddFOp, arith::SubFOp, arith::MulFOp,
             arith::DivFOp, arith::RemFOp, arith::MaxFOp, arith::MinFOp,
-            math::PowFOp,
+            math::PowFOp, math::Atan2Op,
 
             // Integer binary expressions.
             arith::CmpIOp, arith::AddIOp, arith::SubIOp, arith::MulIOp,
@@ -69,8 +69,9 @@ public:
 
             // Special expressions.
             arith::SelectOp, arith::ConstantOp, arith::TruncIOp,
-            arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp, arith::IndexCastOp,
-            arith::UIToFPOp, arith::SIToFPOp, arith::FPToSIOp, arith::FPToUIOp>(
+            arith::TruncFOp, arith::ExtUIOp, arith::ExtSIOp, arith::ExtFOp,
+            arith::IndexCastOp, arith::UIToFPOp, arith::SIToFPOp,
+            arith::FPToSIOp, arith::FPToUIOp>(
             [&](auto opNode) -> ResultType {
               return thisCast->visitOp(opNode, args...);
             })
@@ -177,6 +178,7 @@ public:
   HANDLE(arith::MaxFOp);
   HANDLE(arith::MinFOp);
   HANDLE(math::PowFOp);
+  HANDLE(math::Atan2Op);
 
   // Integer binary expressions.
   HANDLE(arith::CmpIOp);

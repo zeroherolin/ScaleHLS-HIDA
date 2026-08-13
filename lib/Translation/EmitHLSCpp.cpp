@@ -596,6 +596,9 @@ public:
   bool visitOp(arith::MaxFOp op) { return emitter.emitMaxMin(op, "max"), true; }
   bool visitOp(arith::MinFOp op) { return emitter.emitMaxMin(op, "min"), true; }
   bool visitOp(math::PowFOp op) { return emitter.emitMaxMin(op, "pow"), true; }
+  bool visitOp(math::Atan2Op op) {
+    return emitter.emitMaxMin(op, "atan2"), true;
+  }
 
   /// Integer binary expressions.
   bool visitOp(arith::CmpIOp op);
