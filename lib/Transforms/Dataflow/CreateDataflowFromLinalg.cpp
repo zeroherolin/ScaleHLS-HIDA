@@ -204,6 +204,12 @@ struct CreateDataflowFromLinalg
 
     patterns.clear();
     patterns.add<OutlineRootOp<linalg::GenericOp>>(context);
+    // Named structured ops (modern linalg lowerings no longer generalize
+    // everything to linalg.generic).
+    patterns.add<OutlineRootOp<linalg::ReduceOp>>(context);
+    patterns.add<OutlineRootOp<linalg::MapOp>>(context);
+    patterns.add<OutlineRootOp<linalg::TransposeOp>>(context);
+    patterns.add<OutlineRootOp<linalg::BroadcastOp>>(context);
     populateForwardBackwardFusePatterns(patterns);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
