@@ -8,7 +8,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_AFFINELOOPPERFECTION
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 /// Apply loop perfection. Try to sink all operations between loop statements
@@ -170,7 +179,7 @@ bool scalehls::applyAffineLoopPerfection(AffineLoopBand &band) {
 
 namespace {
 struct AffineLoopPerfection
-    : public AffineLoopPerfectionBase<AffineLoopPerfection> {
+    : public scalehls::impl::AffineLoopPerfectionBase<AffineLoopPerfection> {
   void runOnOperation() override {
     // Collect all target loop bands.
     AffineLoopBands targetBands;

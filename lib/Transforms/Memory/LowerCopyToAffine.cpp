@@ -9,7 +9,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_LOWERCOPYTOAFFINE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -32,7 +41,7 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
 
     rewriter.setInsertionPoint(copy);
     auto loc = copy.getLoc();
-    auto memrefType = copy.getSource().getType().cast<MemRefType>();
+    auto memrefType = cast<MemRefType>(copy.getSource().getType());
 
     // Create explicit memory copy using an affine loop nest.
     SmallVector<Value, 4> ivs;
@@ -42,7 +51,7 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
         ivs.push_back(constantZero);
         continue;
       }
-      auto loop = rewriter.create<mlir::AffineForOp>(loc, 0, dimSize);
+      auto loop = rewriter.create<mlir::affine::AffineForOp>(loc, 0, dimSize);
       setParallelAttr(loop);
       // If the copy op is not external, we consider the loop as point loop
       // that needs to be optimized later.
@@ -54,8 +63,8 @@ struct LowerCopy : public OpRewritePattern<memref::CopyOp> {
 
     // Create affine load/store operations.
     auto value =
-        rewriter.create<mlir::AffineLoadOp>(loc, copy.getSource(), ivs);
-    rewriter.create<mlir::AffineStoreOp>(loc, value, copy.getTarget(), ivs);
+        rewriter.create<mlir::affine::AffineLoadOp>(loc, copy.getSource(), ivs);
+    rewriter.create<mlir::affine::AffineStoreOp>(loc, value, copy.getTarget(), ivs);
 
     rewriter.eraseOp(copy);
     return success();
@@ -67,7 +76,7 @@ private:
 } // namespace
 
 namespace {
-struct LowerCopyToAffine : public LowerCopyToAffineBase<LowerCopyToAffine> {
+struct LowerCopyToAffine : public scalehls::impl::LowerCopyToAffineBase<LowerCopyToAffine> {
   LowerCopyToAffine() = default;
   LowerCopyToAffine(bool argInternalCopyOnly) {
     internalCopyOnly = argInternalCopyOnly;

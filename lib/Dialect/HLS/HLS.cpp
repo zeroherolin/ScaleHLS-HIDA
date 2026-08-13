@@ -13,6 +13,7 @@
 #include "llvm/ADT/TypeSwitch.h"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -181,12 +182,12 @@ SmallVector<Operation *> TaskOp::getLiveinUsers(Value livein) {
 
 LogicalResult ToStreamOp::verify() {
   if (getValue().getType() !=
-      getStream().getType().cast<StreamType>().getElementType())
+      cast<StreamType>(getStream().getType()).getElementType())
     return emitOpError("value and stream type doesn't match");
   return success();
 }
 
-OpFoldResult ToStreamOp::fold(ArrayRef<Attribute>) {
+OpFoldResult ToStreamOp::fold(FoldAdaptor) {
   if (auto toValue = getValue().getDefiningOp<ToValueOp>())
     if (toValue.getStream().getType() == getType())
       return toValue.getStream();
@@ -195,12 +196,12 @@ OpFoldResult ToStreamOp::fold(ArrayRef<Attribute>) {
 
 LogicalResult ToValueOp::verify() {
   if (getValue().getType() !=
-      getStream().getType().cast<StreamType>().getElementType())
+      cast<StreamType>(getStream().getType()).getElementType())
     return emitOpError("value and stream type doesn't match");
   return success();
 }
 
-OpFoldResult ToValueOp::fold(ArrayRef<Attribute>) {
+OpFoldResult ToValueOp::fold(FoldAdaptor) {
   if (auto toStream = getStream().getDefiningOp<ToStreamOp>())
     if (toStream.getValue().getType() == getType())
       return toStream.getValue();
@@ -301,18 +302,18 @@ LogicalResult ScheduleOp::verify() {
 void ScheduleOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  for (auto value : getOperands())
-    if (value.getType().isa<MemRefType, StreamType>()) {
-      effects.emplace_back(MemoryEffects::Read::get(), value,
+  for (auto &operand : getOperation()->getOpOperands())
+    if (isa<MemRefType, StreamType>(operand.get().getType())) {
+      effects.emplace_back(MemoryEffects::Read::get(), &operand,
                            SideEffects::DefaultResource::get());
-      effects.emplace_back(MemoryEffects::Write::get(), value,
+      effects.emplace_back(MemoryEffects::Write::get(), &operand,
                            SideEffects::DefaultResource::get());
     }
 }
 
 /// FIXME: Check whether the schedule is dependence free.
 bool ScheduleOp::isDependenceFree() {
-  if (auto loop = dyn_cast<mlir::AffineForOp>((*this)->getParentOp()))
+  if (auto loop = dyn_cast<mlir::affine::AffineForOp>((*this)->getParentOp()))
     return hasParallelAttr(loop);
   return isa<func::FuncOp>((*this)->getParentOp());
 }
@@ -390,7 +391,7 @@ LogicalResult NodeOp::verify() {
     return emitOpError("operand type doesn't align with argument type");
 
   if (llvm::any_of(getParams(), [](Value param) {
-        return param.getType().isa<MemRefType, StreamType>();
+        return isa<MemRefType, StreamType>(param.getType());
       }))
     return emitOpError("node params should not be memref or stream typed");
 
@@ -448,14 +449,13 @@ LogicalResult NodeOp::verify() {
 void NodeOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  for (auto value : getInputs())
-    effects.emplace_back(MemoryEffects::Read::get(), value,
+  auto numInputs = getInputs().size();
+  for (auto &operand : getOperation()->getOpOperands()) {
+    effects.emplace_back(MemoryEffects::Read::get(), &operand,
                          SideEffects::DefaultResource::get());
-  for (auto value : getOutputs()) {
-    effects.emplace_back(MemoryEffects::Read::get(), value,
-                         SideEffects::DefaultResource::get());
-    effects.emplace_back(MemoryEffects::Write::get(), value,
-                         SideEffects::DefaultResource::get());
+    if (operand.getOperandNumber() >= numInputs)
+      effects.emplace_back(MemoryEffects::Write::get(), &operand,
+                           SideEffects::DefaultResource::get());
   }
 }
 
@@ -473,11 +473,11 @@ void NodeOp::setInputTap(unsigned idx, unsigned tap) {
   setInputTapsAttr(builder.getI32ArrayAttr(newInputTaps));
 }
 unsigned NodeOp::getInputTap(unsigned idx) {
-  return getInputTaps()[idx].cast<IntegerAttr>().getInt();
+  return cast<IntegerAttr>(getInputTaps()[idx]).getInt();
 }
 SmallVector<unsigned> NodeOp::getInputTapsAsInt() {
   auto array = llvm::map_range(getInputTaps(), [](Attribute attr) {
-    return attr.cast<IntegerAttr>().getInt();
+    return cast<IntegerAttr>(attr).getInt();
   });
   return {array.begin(), array.end()};
 }
@@ -525,7 +525,7 @@ iterator_range<Block::args_iterator> NodeOp::getParamArgs() {
 }
 
 bool NodeOp::isLivein(Value value) {
-  return value.isa<BlockArgument>() &&
+  return isa<BlockArgument>(value) &&
          value.getParentRegion() == &(*this).getBody();
 }
 
@@ -567,7 +567,7 @@ struct FlattenReadOnlyBuffer : public OpRewritePattern<BufferOp> {
                                 PatternRewriter &rewriter) const override {
     if (buffer.getInitValue() &&
         llvm::all_of(buffer->getUsers(), [](Operation *user) {
-          return isa<mlir::AffineLoadOp>(user);
+          return isa<mlir::affine::AffineLoadOp>(user);
         })) {
       auto initValue = buffer.getInitValue().value();
       auto constant =
@@ -704,18 +704,19 @@ LogicalResult BufferOp::verify() {
 }
 
 int32_t BufferOp::getBufferDepth() { return getDepth(); }
-Optional<TypedAttr> BufferOp::getBufferInitValue() { return getInitValue(); }
+std::optional<TypedAttr> BufferOp::getBufferInitValue() { return getInitValue(); }
 
 void BufferOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
+  effects.emplace_back(MemoryEffects::Allocate::get(),
+                       cast<OpResult>(getMemref()),
                        SideEffects::DefaultResource::get());
 }
 
 int32_t ConstBufferOp::getBufferDepth() { return 1; }
-Optional<TypedAttr> ConstBufferOp::getBufferInitValue() {
-  return Optional<TypedAttr>();
+std::optional<TypedAttr> ConstBufferOp::getBufferInitValue() {
+  return std::optional<TypedAttr>();
 }
 
 LogicalResult ConstBufferOp::verify() {
@@ -723,7 +724,7 @@ LogicalResult ConstBufferOp::verify() {
     return emitOpError("const buffer cannot be written");
 
   auto memrefType = getType();
-  auto attrType = getValue().getType().cast<TensorType>();
+  auto attrType = cast<TensorType>(getValue().getType());
   if (memrefType.getElementType() != attrType.getElementType())
     return emitOpError("element type mismatch");
   if (memrefType.getShape() != attrType.getShape())
@@ -734,7 +735,8 @@ LogicalResult ConstBufferOp::verify() {
 void ConstBufferOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Allocate::get(), getMemref(),
+  effects.emplace_back(MemoryEffects::Allocate::get(),
+                       cast<OpResult>(getMemref()),
                        SideEffects::DefaultResource::get());
 }
 
@@ -743,7 +745,7 @@ void ConstBufferOp::getEffects(
 //===----------------------------------------------------------------------===//
 
 LogicalResult StreamOp::verify() {
-  if (getDepth() != getChannel().getType().cast<StreamType>().getDepth())
+  if (getDepth() != cast<StreamType>(getChannel().getType()).getDepth())
     return emitOpError("stream channel depth is not aligned");
   return success();
 }
@@ -751,13 +753,14 @@ LogicalResult StreamOp::verify() {
 void StreamOp::getEffects(
     SmallVectorImpl<SideEffects::EffectInstance<MemoryEffects::Effect>>
         &effects) {
-  effects.emplace_back(MemoryEffects::Allocate::get(), getChannel(),
+  effects.emplace_back(MemoryEffects::Allocate::get(),
+                       cast<OpResult>(getChannel()),
                        SideEffects::DefaultResource::get());
 }
 
 LogicalResult StreamReadOp::verify() {
   if (getResult())
-    if (getChannel().getType().cast<StreamType>().getElementType() !=
+    if (cast<StreamType>(getChannel().getType()).getElementType() !=
         getResult().getType())
       return emitOpError("result type doesn't align with channel type");
   return success();
@@ -771,7 +774,7 @@ LogicalResult StreamReadOp::verify() {
 // }
 
 LogicalResult StreamWriteOp::verify() {
-  if (getChannel().getType().cast<StreamType>().getElementType() !=
+  if (cast<StreamType>(getChannel().getType()).getElementType() !=
       getValue().getType())
     return emitOpError("value type doesn't align with channel type");
   return success();
@@ -791,13 +794,13 @@ LogicalResult StreamWriteOp::verify() {
 LogicalResult
 verifyVectorizationTypes(function_ref<InFlightDiagnostic()> emitError,
                          MemRefType type, MemRefType vectorizedType) {
-  auto vectorType = vectorizedType.getElementType().dyn_cast<VectorType>();
+  auto vectorType = dyn_cast<VectorType>(vectorizedType.getElementType());
   if (!vectorType || vectorType.getElementType() != type.getElementType())
     return emitError() << "vectorized type must have vector elements with the "
                           "same data type";
 
-  auto layout = type.getLayout().dyn_cast<TileLayoutAttr>();
-  auto vectorizedLayout = vectorizedType.getLayout().dyn_cast<TileLayoutAttr>();
+  auto layout = dyn_cast<TileLayoutAttr>(type.getLayout());
+  auto vectorizedLayout = dyn_cast<TileLayoutAttr>(vectorizedType.getLayout());
   if (!layout || !vectorizedLayout)
     return emitError() << "input and output types must have tile layout";
 
@@ -831,7 +834,7 @@ LogicalResult BufferDevectorizeOp::verify() {
                                   getInputType());
 }
 
-OpFoldResult BufferVectorizeOp::fold(ArrayRef<Attribute>) {
+OpFoldResult BufferVectorizeOp::fold(FoldAdaptor) {
   if (auto devectorize = getInput().getDefiningOp<BufferDevectorizeOp>())
     if (devectorize.getInputType() == getType())
       return devectorize.getInput();
@@ -845,15 +848,15 @@ OpFoldResult BufferVectorizeOp::fold(ArrayRef<Attribute>) {
 LogicalResult AxiType::verify(function_ref<InFlightDiagnostic()> emitError,
                               Type elementType) {
   // TODO: Support AxiLite type for scalar values.
-  if (!elementType.isa<MemRefType, StreamType>())
+  if (!isa<MemRefType, StreamType>(elementType))
     return emitError() << "AXI element type must be a memref or stream";
   return success();
 }
 
 Type AxiType::getDataType() {
-  if (auto memrefType = getElementType().dyn_cast<MemRefType>())
+  if (auto memrefType = dyn_cast<MemRefType>(getElementType()))
     return memrefType.getElementType();
-  else if (auto streamType = getElementType().dyn_cast<StreamType>())
+  else if (auto streamType = dyn_cast<StreamType>(getElementType()))
     return streamType.getElementType();
   else
     llvm_unreachable("AXI element type must be a memref or stream");
@@ -861,7 +864,7 @@ Type AxiType::getDataType() {
 }
 
 LogicalResult AxiPortOp::verify() {
-  if (!getAxi().isa<BlockArgument>())
+  if (!isa<BlockArgument>(getAxi()))
     return emitOpError("axi must be block arguments");
 
   if (getAxiType().getElementType() != getElement().getType())
@@ -897,9 +900,9 @@ LogicalResult AxiPackOp::verify() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult PrimMulOp::verify() {
-  auto AIsVector = getA().getType().isa<VectorType>();
-  auto BIsVector = getB().getType().isa<VectorType>();
-  auto CIsVector = getC().getType().isa<VectorType>();
+  auto AIsVector = isa<VectorType>(getA().getType());
+  auto BIsVector = isa<VectorType>(getB().getType());
+  auto CIsVector = isa<VectorType>(getC().getType());
 
   if ((AIsVector || BIsVector) && CIsVector)
     return success();
@@ -909,8 +912,8 @@ LogicalResult PrimMulOp::verify() {
 }
 
 bool PrimMulOp::isPackMul() {
-  auto AIsVector = getA().getType().isa<VectorType>();
-  auto BIsVector = getB().getType().isa<VectorType>();
+  auto AIsVector = isa<VectorType>(getA().getType());
+  auto BIsVector = isa<VectorType>(getB().getType());
   return (AIsVector && !BIsVector) || (!AIsVector && BIsVector);
 }
 
@@ -975,7 +978,7 @@ struct AlwaysTrueOrFalseSelect : public OpRewritePattern<AffineSelectOp> {
     else if (set.getNumInputs() == 0) {
       SmallVector<bool, 4> flagList;
       for (auto expr : llvm::enumerate(set.getConstraints())) {
-        auto constValue = expr.value().cast<AffineConstantExpr>().getValue();
+        auto constValue = cast<AffineConstantExpr>(expr.value()).getValue();
         flagList.push_back(set.isEq(expr.index()) ? constValue == 0
                                                   : constValue >= 0);
       }
@@ -992,7 +995,7 @@ struct AlwaysTrueOrFalseSelect : public OpRewritePattern<AffineSelectOp> {
 
       // Add induction variable constraints.
       for (auto arg : args)
-        if (isForInductionVar(arg))
+        if (isAffineForInductionVar(arg))
           (void)constrs.addAffineForOpDomain(getForInductionVarOwner(arg));
 
       // Always false if there's no known solution for the constraints.
@@ -1017,10 +1020,20 @@ void AffineSelectOp::getCanonicalizationPatterns(RewritePatternSet &results,
 }
 
 /// Canonicalize an affine if op's conditional (integer set + operands).
-OpFoldResult AffineSelectOp::fold(ArrayRef<Attribute>) {
+OpFoldResult AffineSelectOp::fold(FoldAdaptor) {
   auto set = getIntegerSet();
   SmallVector<Value, 4> operands(getArgs());
-  composeSetAndOperands(set, operands);
+  // Compose affine.apply chains into the set via the map-composition
+  // API (composeSetAndOperands is no longer public upstream).
+  if (llvm::any_of(operands, [](Value v) {
+        return isa_and_present<affine::AffineApplyOp>(v.getDefiningOp());
+      })) {
+    auto map = AffineMap::get(set.getNumDims(), set.getNumSymbols(),
+                              set.getConstraints(), set.getContext());
+    affine::fullyComposeAffineMapAndOperands(&map, &operands);
+    set = IntegerSet::get(map.getNumDims(), map.getNumSymbols(),
+                          map.getResults(), set.getEqFlags());
+  }
   canonicalizeSetAndOperands(&set, &operands);
   return {};
 }
@@ -1088,6 +1101,16 @@ ParseResult AffineSelectOp::parse(OpAsmParser &parser, OperationState &result) {
                              result.operands))
     return failure();
   return success();
+}
+
+/// Prints `(dims)[symbols]`; the upstream helper is no longer public.
+static void printDimAndSymbolList(Operation::operand_iterator begin,
+                                  Operation::operand_iterator end,
+                                  unsigned numDims, OpAsmPrinter &p) {
+  OperandRange operands(begin, end);
+  p << '(' << operands.take_front(numDims) << ')';
+  if (operands.size() > numDims)
+    p << '[' << operands.drop_front(numDims) << ']';
 }
 
 void AffineSelectOp::print(OpAsmPrinter &p) {
@@ -1305,7 +1328,7 @@ void hls::setTileLayout(Operation *op, ArrayRef<int64_t> tileShape) {
 
 TileLayoutAttr hls::getTileLayout(Value memref) {
   if (auto buffer = findBuffer(memref)) {
-    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
+    if (auto bufferArg = dyn_cast<BlockArgument>(buffer)) {
       if (auto func =
               dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
         return func.getArgAttrOfType<TileLayoutAttr>(bufferArg.getArgNumber(),
@@ -1317,7 +1340,7 @@ TileLayoutAttr hls::getTileLayout(Value memref) {
 }
 void hls::setTileLayout(Value memref, TileLayoutAttr tileLayout) {
   if (auto buffer = findBuffer(memref)) {
-    if (auto bufferArg = buffer.dyn_cast<BlockArgument>()) {
+    if (auto bufferArg = dyn_cast<BlockArgument>(buffer)) {
       if (auto func =
               dyn_cast<func::FuncOp>(bufferArg.getOwner()->getParentOp()))
         func.setArgAttr(bufferArg.getArgNumber(), "hls.tile_layout",

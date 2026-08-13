@@ -37,7 +37,7 @@ public:
 
   // Entry for estimating function and loop.
   void estimateFunc(func::FuncOp func);
-  void estimateLoop(AffineForOp loop, func::FuncOp func);
+  void estimateLoop(affine::AffineForOp loop, func::FuncOp func);
 
   using HLSVisitorBase::visitOp;
   bool visitUnhandledOp(Operation *op, int64_t begin) {
@@ -45,14 +45,14 @@ public:
     return setTiming(op, begin, begin, 0, 0), true;
   }
 
-  bool visitOp(AffineForOp op, int64_t begin);
-  bool visitOp(AffineIfOp op, int64_t begin);
+  bool visitOp(affine::AffineForOp op, int64_t begin);
+  bool visitOp(affine::AffineIfOp op, int64_t begin);
   bool visitOp(scf::IfOp op, int64_t begin);
   bool visitOp(func::CallOp op, int64_t begin);
-  bool visitOp(AffineLoadOp op, int64_t begin) {
+  bool visitOp(affine::AffineLoadOp op, int64_t begin) {
     return estimateLoadStoreTiming(op, begin), true;
   }
-  bool visitOp(AffineStoreOp op, int64_t begin) {
+  bool visitOp(affine::AffineStoreOp op, int64_t begin) {
     return estimateLoadStoreTiming(op, begin), true;
   }
   bool visitOp(memref::LoadOp op, int64_t begin) {
@@ -62,7 +62,7 @@ public:
     return setTiming(op, begin, begin + 1, 1, 1), true;
   }
   bool visitOp(memref::CopyOp op, int64_t begin) {
-    auto type = op.getTarget().getType().cast<MemRefType>();
+    auto type = cast<MemRefType>(op.getTarget().getType());
     return setTiming(op, begin, begin + type.getNumElements(), 1, 1), true;
   }
 
@@ -89,10 +89,10 @@ private:
   void getPartitionIndices(Operation *op);
   void estimateLoadStoreTiming(Operation *op, int64_t begin);
 
-  /// AffineForOp related methods.
+  /// affine::AffineForOp related methods.
   int64_t getResMinII(int64_t begin, int64_t end, MemAccessesMap &map);
   int64_t getDepMinII(int64_t II, func::FuncOp func, MemAccessesMap &map);
-  int64_t getDepMinII(int64_t II, AffineForOp forOp, MemAccessesMap &map);
+  int64_t getDepMinII(int64_t II, affine::AffineForOp forOp, MemAccessesMap &map);
 
   /// Block scheduler and estimator.
   ResourceAttr calculateResource(Operation *funcOrLoop);
@@ -106,7 +106,7 @@ private:
     unsigned wrPort = 0;
     unsigned rdwrPort = 0;
 
-    SmallVector<MemRefAccess, 2> rdAccesses;
+    SmallVector<affine::MemRefAccess, 2> rdAccesses;
   };
 
   // For storing memory port information of all partitions indexed by the

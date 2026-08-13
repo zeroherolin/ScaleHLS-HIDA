@@ -9,6 +9,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_SCHEDULEDATAFLOWNODE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -51,7 +59,7 @@ private:
 
 namespace {
 struct ScheduleDataflowNode
-    : public ScheduleDataflowNodeBase<ScheduleDataflowNode> {
+    : public scalehls::impl::ScheduleDataflowNodeBase<ScheduleDataflowNode> {
   ScheduleDataflowNode() = default;
   explicit ScheduleDataflowNode(bool argIgnoreViolations) {
     ignoreViolations = argIgnoreViolations;

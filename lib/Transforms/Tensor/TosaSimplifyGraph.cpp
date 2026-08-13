@@ -8,18 +8,21 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_TOSASIMPLIFYGRAPH
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 
-/// A helper to get permuatation vector from value.
-static SmallVector<int64_t, 6> getPermValues(Value perm) {
-  DenseIntElementsAttr permAttr;
-  if (!matchPattern(perm, m_Constant(&permAttr)))
-    return {};
-
+/// A helper to get the permutation vector.
+static SmallVector<int64_t, 6> getPermValues(ArrayRef<int32_t> perms) {
   return llvm::to_vector<6>(
-      llvm::map_range(permAttr.getValues<APInt>(),
-                      [](const APInt &val) { return val.getSExtValue(); }));
+      llvm::map_range(perms, [](int32_t val) { return int64_t(val); }));
 }
 
 namespace {
@@ -107,7 +110,7 @@ struct RewriteElmwBinary : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-struct TosaSimplifyGraph : public TosaSimplifyGraphBase<TosaSimplifyGraph> {
+struct TosaSimplifyGraph : public scalehls::impl::TosaSimplifyGraphBase<TosaSimplifyGraph> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -119,7 +122,7 @@ struct TosaSimplifyGraph : public TosaSimplifyGraphBase<TosaSimplifyGraph> {
     patterns.add<RewriteElmwBinary<tosa::AddOp>>(context);
     patterns.add<RewriteElmwBinary<tosa::SubOp>>(context);
     patterns.add<RewriteElmwBinary<tosa::MulOp>>(context);
-    patterns.add<RewriteElmwBinary<tosa::DivOp>>(context);
+    patterns.add<RewriteElmwBinary<tosa::IntDivOp>>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
   }
 };

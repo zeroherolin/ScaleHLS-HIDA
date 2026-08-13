@@ -8,6 +8,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_STREAMDATAFLOWTASK
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -22,7 +30,7 @@ struct StreamTaskIOs : public OpRewritePattern<TaskOp> {
 
     for (auto result : op->getResults()) {
       auto type = result.getType();
-      if (type.isa<MemRefType, StreamType>())
+      if (isa<MemRefType, StreamType>(type))
         continue;
 
       // Convert result type to stream.
@@ -68,7 +76,7 @@ struct ConvertToStreamWrite : public OpRewritePattern<ToStreamOp> {
     rewriter.create<StreamWriteOp>(op.getLoc(), op.getStream(), op.getValue());
     rewriter.setInsertionPoint(op);
     rewriter.replaceOpWithNewOp<StreamOp>(
-        op, op.getType(), op.getType().cast<StreamType>().getDepth());
+        op, op.getType(), cast<StreamType>(op.getType()).getDepth());
     return success();
   }
 };
@@ -106,7 +114,7 @@ struct HoistStream : public OpRewritePattern<OpType> {
 } // namespace
 
 namespace {
-struct StreamDataflowTask : public StreamDataflowTaskBase<StreamDataflowTask> {
+struct StreamDataflowTask : public scalehls::impl::StreamDataflowTaskBase<StreamDataflowTask> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

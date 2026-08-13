@@ -11,9 +11,18 @@
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/Debug.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_AFFINELOOPORDEROPT
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 #define DEBUG_TYPE "scalehls"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 /// TODO: support to pass in permutation map.
@@ -185,7 +194,7 @@ bool scalehls::applyAffineLoopOrderOpt(AffineLoopBand &band,
 }
 
 namespace {
-struct AffineLoopOrderOpt : public AffineLoopOrderOptBase<AffineLoopOrderOpt> {
+struct AffineLoopOrderOpt : public scalehls::impl::AffineLoopOrderOptBase<AffineLoopOrderOpt> {
   void runOnOperation() override {
     // Collect all target loop bands.
     AffineLoopBands targetBands;

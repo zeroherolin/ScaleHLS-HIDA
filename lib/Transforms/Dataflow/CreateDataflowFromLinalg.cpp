@@ -9,6 +9,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CREATEDATAFLOWFROMLINALG
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -113,12 +121,12 @@ struct ForwardFuseGenericOp : public OpRewritePattern<linalg::GenericOp> {
     bool matched = false;
     auto body = op.getBody();
 
-    if (op.getNumOutputs() == 1 &&
+    if (op.getNumDpsInits() == 1 &&
         llvm::hasSingleElement(body->getOperations())) {
       auto output = body->getTerminator()->getOperand(0);
 
       // Copy from input to output.
-      if (op.getNumInputs() == 1 && output == body->getArgument(0))
+      if (op.getNumDpsInputs() == 1 && output == body->getArgument(0))
         matched = true;
 
       // Copy from constant to output.
@@ -168,7 +176,7 @@ populateForwardBackwardFusePatterns(mlir::RewritePatternSet &patterns) {
 
 namespace {
 struct CreateDataflowFromLinalg
-    : public CreateDataflowFromLinalgBase<CreateDataflowFromLinalg> {
+    : public scalehls::impl::CreateDataflowFromLinalgBase<CreateDataflowFromLinalg> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

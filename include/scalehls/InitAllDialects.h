@@ -21,6 +21,8 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
+#include "mlir/InitAllDialects.h"
+#include "mlir/InitAllExtensions.h"
 #include "scalehls/Dialect/HLS/HLS.h"
 
 namespace mlir {
@@ -36,7 +38,7 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::linalg::LinalgDialect,
     mlir::memref::MemRefDialect,
     mlir::bufferization::BufferizationDialect,
-    mlir::AffineDialect,
+    mlir::affine::AffineDialect,
     mlir::math::MathDialect,
     mlir::arith::ArithDialect,
     mlir::vector::VectorDialect,
@@ -47,6 +49,12 @@ inline void registerAllDialects(mlir::DialectRegistry &registry) {
     mlir::ml_program::MLProgramDialect
   >();
   // clang-format on
+
+  // Upstream dialects + interface extensions (bufferizable-op external
+  // models etc.); required since strict dialect/extension loading
+  // landed upstream.
+  mlir::registerAllDialects(registry);
+  mlir::registerAllExtensions(registry);
 }
 
 } // namespace scalehls

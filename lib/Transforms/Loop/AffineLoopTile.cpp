@@ -10,7 +10,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_AFFINELOOPTILE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -93,7 +102,7 @@ void scalehls::adjustToDivisorsOfTripCounts(
   assert(band.size() == tileSizes->size() && "invalid tile size count");
   for (unsigned i = 0, e = band.size(); i < e; i++) {
     unsigned &tSizeAdjusted = (*tileSizes)[i];
-    Optional<uint64_t> mayConst = getConstantTripCount(band[i]);
+    std::optional<uint64_t> mayConst = getConstantTripCount(band[i]);
     if (!mayConst)
       continue;
 
@@ -109,7 +118,7 @@ void scalehls::adjustToDivisorsOfTripCounts(
 
 namespace {
 /// A pass to perform loop tiling on all suitable loop nests of a Function.
-struct AffineLoopTile : public AffineLoopTileBase<AffineLoopTile> {
+struct AffineLoopTile : public scalehls::impl::AffineLoopTileBase<AffineLoopTile> {
   AffineLoopTile() = default;
   explicit AffineLoopTile(unsigned loopTileSize) { tileSize = loopTileSize; }
 

@@ -14,5 +14,5 @@ int main(int argc, char **argv) {
   mlir::scalehls::registerAllPasses();
 
   return mlir::failed(mlir::MlirOptMain(
-      argc, argv, "ScaleHLS Optimization Tool", registry, true));
+      argc, argv, "ScaleHLS Optimization Tool", registry));
 }

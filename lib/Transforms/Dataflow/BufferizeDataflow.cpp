@@ -9,6 +9,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_BUFFERIZEDATAFLOW
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -23,7 +31,7 @@ struct BufferizeDispatchOrTask : public OpRewritePattern<OpType> {
     bool hasChanged = false;
 
     for (auto result : op->getResults()) {
-      if (auto tensorType = result.getType().template dyn_cast<TensorType>()) {
+      if (auto tensorType = dyn_cast<TensorType>(result.getType())) {
         auto memrefType =
             MemRefType::get(tensorType.getShape(), tensorType.getElementType());
         result.setType(memrefType);
@@ -36,7 +44,7 @@ struct BufferizeDispatchOrTask : public OpRewritePattern<OpType> {
 
         rewriter.setInsertionPoint(op.getYieldOp());
         auto output = op.getYieldOp().getOperand(result.getResultNumber());
-        auto memref = rewriter.template create<bufferization::ToMemrefOp>(
+        auto memref = rewriter.template create<bufferization::ToBufferOp>(
             loc, memrefType, output);
         op.getYieldOp()->getOpOperand(result.getResultNumber()).set(memref);
         hasChanged = true;
@@ -150,7 +158,7 @@ void scalehls::populateBufferConversionPatterns(RewritePatternSet &patterns) {
 }
 
 namespace {
-struct BufferizeDataflow : public BufferizeDataflowBase<BufferizeDataflow> {
+struct BufferizeDataflow : public scalehls::impl::BufferizeDataflowBase<BufferizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

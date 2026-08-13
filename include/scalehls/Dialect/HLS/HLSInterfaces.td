@@ -20,13 +20,13 @@ def BufferLikeInterface : OpInterface<"BufferLikeInterface"> {
     >,
     InterfaceMethod<"Return the memref type of the buffer",
       "mlir::MemRefType", "getMemrefType", (ins), [{
-        return $_op.getMemref().getType().template cast<mlir::MemRefType>();
+        return llvm::cast<mlir::MemRefType>($_op.getMemref().getType());
       }]
     >,
     InterfaceMethod<"Return the depth of the buffer", "int32_t",
                     "getBufferDepth">,
     InterfaceMethod<"Return the initial value of the buffer",
-                    "llvm::Optional<mlir::TypedAttr>", "getBufferInitValue">,
+                    "std::optional<mlir::TypedAttr>", "getBufferInitValue">,
   ];
 }
 

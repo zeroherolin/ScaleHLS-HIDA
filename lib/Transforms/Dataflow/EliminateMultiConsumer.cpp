@@ -8,6 +8,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_ELIMINATEMULTICONSUMER
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -63,7 +71,7 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
 
 namespace {
 struct EliminateMultiConsumer
-    : public EliminateMultiConsumerBase<EliminateMultiConsumer> {
+    : public scalehls::impl::EliminateMultiConsumerBase<EliminateMultiConsumer> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

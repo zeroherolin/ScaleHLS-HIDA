@@ -12,6 +12,9 @@ target_link_libraries(scalehls-opt
   ${dialect_libs}
   ${conversion_libs}
   MLIROptLib
+  MLIRRegisterAllDialects
+  MLIRRegisterAllExtensions
+  MLIRRegisterAllPasses
 
   MLIRHLS
   MLIRScaleHLSTransforms

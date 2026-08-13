@@ -8,12 +8,21 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_COLLAPSEMEMREFUNITDIMS
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
 static LogicalResult collapseMemref(Value memref) {
-  auto type = memref.getType().dyn_cast<MemRefType>();
+  auto type = dyn_cast<MemRefType>(memref.getType());
   if (!type)
     return failure();
 
@@ -46,9 +55,9 @@ static LogicalResult collapseMemref(Value memref) {
   // Update buffer users.
   for (auto user : memref.getUsers()) {
     AffineMap map;
-    if (auto read = dyn_cast<mlir::AffineReadOpInterface>(user))
+    if (auto read = dyn_cast<mlir::affine::AffineReadOpInterface>(user))
       map = read.getAffineMap();
-    else if (auto write = dyn_cast<mlir::AffineWriteOpInterface>(user))
+    else if (auto write = dyn_cast<mlir::affine::AffineWriteOpInterface>(user))
       map = write.getAffineMap();
 
     SmallVector<AffineExpr> newResults;
@@ -110,14 +119,16 @@ struct CollapseFuncMemref : public OpRewritePattern<func::FuncOp> {
 
 namespace {
 struct CollapseMemrefUnitDims
-    : public scalehls::CollapseMemrefUnitDimsBase<CollapseMemrefUnitDims> {
+    : public scalehls::impl::CollapseMemrefUnitDimsBase<CollapseMemrefUnitDims> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<CollapseFuncMemref>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    (void)applyOpPatternsGreedily(
+        ArrayRef<Operation *>{func.getOperation()},
+        std::move(patterns));
   }
 };
 } // namespace

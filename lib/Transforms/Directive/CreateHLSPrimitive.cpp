@@ -7,14 +7,22 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CREATEHLSPRIMITIVE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
 static IntegerType getIntDataType(Type type) {
-  auto dataType = type.dyn_cast<IntegerType>();
-  if (auto vectorType = type.dyn_cast<VectorType>())
-    dataType = vectorType.getElementType().dyn_cast<IntegerType>();
+  auto dataType = dyn_cast<IntegerType>(type);
+  if (auto vectorType = dyn_cast<VectorType>(type))
+    dataType = dyn_cast<IntegerType>(vectorType.getElementType());
   return dataType;
 }
 
@@ -31,7 +39,7 @@ struct AddOpRewritePattern : public OpRewritePattern<arith::AddIOp> {
 
     // Generate new type.
     Type newType = rewriter.getI32Type();
-    if (auto vectorType = add.getType().dyn_cast<VectorType>())
+    if (auto vectorType = dyn_cast<VectorType>(add.getType()))
       newType = VectorType::get(vectorType.getShape(), rewriter.getI32Type());
 
     // Cast add op operand from the new type.
@@ -67,7 +75,7 @@ struct MulOpRewritePattern : public OpRewritePattern<arith::MulIOp> {
 
     // Generate new type.
     Type newType = IntegerType::get(rewriter.getContext(), 16);
-    if (auto vectorType = mul.getType().dyn_cast<VectorType>()) {
+    if (auto vectorType = dyn_cast<VectorType>(mul.getType())) {
       if (vectorType.getNumElements() != 2)
         return failure();
       newType = VectorType::get(vectorType.getShape(),
@@ -95,7 +103,7 @@ struct MulOpRewritePattern : public OpRewritePattern<arith::MulIOp> {
 } // namespace
 
 namespace {
-struct CreateHLSPrimitive : public CreateHLSPrimitiveBase<CreateHLSPrimitive> {
+struct CreateHLSPrimitive : public scalehls::impl::CreateHLSPrimitiveBase<CreateHLSPrimitive> {
   void runOnOperation() override {
     auto func = getOperation();
 

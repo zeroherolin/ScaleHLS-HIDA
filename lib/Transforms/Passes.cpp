@@ -5,7 +5,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Conversion/Passes.h"
-#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/Affine/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/Transforms/Passes.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -65,8 +65,8 @@ void scalehls::addCreateSubviewPasses(OpPassManager &pm,
 }
 
 void scalehls::addSimplifyAffineLoopPasses(OpPassManager &pm) {
-  pm.addPass(mlir::createAffineLoopNormalizePass());
-  pm.addPass(mlir::createSimplifyAffineStructuresPass());
+  pm.addPass(affine::createAffineLoopNormalizePass());
+  pm.addPass(affine::createSimplifyAffineStructuresPass());
   pm.addPass(mlir::createCanonicalizerPass());
 }
 
@@ -149,9 +149,9 @@ void scalehls::registerHIDAPyTorchPipeline() {
           pm.addPass(mlir::createCanonicalizerPass());
 
           // TOSA to Linalg conversion.
-          tosa::addTosaToLinalgPasses(pm);
-          pm.addPass(tosa::createTosaToArith());
-          pm.addPass(tosa::createTosaToTensor());
+          tosa::addTosaToLinalgPasses(pm, TosaToLinalgOptions());
+          pm.addPass(createTosaToArithPass());
+          pm.addPass(createTosaToTensorPass());
         }
 
         // Linalg fake quantization.
@@ -171,11 +171,14 @@ void scalehls::registerHIDAPyTorchPipeline() {
         if (opts.debugPoint == 2)
           return;
 
-        // Bufferization.
-        pm.addPass(mlir::createLinalgBufferizePass());
-        pm.addPass(arith::createArithBufferizePass());
-        pm.addPass(mlir::createTensorBufferizePass());
-        pm.addPass(func::createFuncBufferizePass());
+        // Bufferization (one-shot; the historical per-dialect
+        // bufferize passes were removed upstream).
+        bufferization::OneShotBufferizePassOptions bufferizeOptions;
+        bufferizeOptions.bufferizeFunctionBoundaries = true;
+        // The HLS dataflow ops bufferize later (BufferizeDataflow).
+        bufferizeOptions.allowUnknownOps = true;
+        pm.addPass(
+            bufferization::createOneShotBufferizePass(bufferizeOptions));
         pm.addPass(bufferization::createBufferResultsToOutParamsPass());
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
@@ -184,7 +187,7 @@ void scalehls::registerHIDAPyTorchPipeline() {
           return;
 
         // Linalg to Affine conversion.
-        pm.addPass(mlir::createLinalgGeneralizationPass());
+        pm.addPass(mlir::createLinalgGeneralizeNamedOpsPass());
         pm.addPass(scalehls::createSimplifyCopyPass());
         pm.addPass(mlir::createConvertLinalgToAffineLoopsPass());
         pm.addPass(scalehls::createLowerCopyToAffinePass());
@@ -227,7 +230,7 @@ void scalehls::registerHIDAPyTorchPipeline() {
         pm.addPass(scalehls::createAffineLoopOrderOptPass());
         if (opts.loopTileSize != 1)
           pm.addPass(scalehls::createAffineLoopTilePass(opts.loopTileSize));
-        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(affine::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 7)
@@ -238,7 +241,7 @@ void scalehls::registerHIDAPyTorchPipeline() {
         pm.addPass(scalehls::createCreateLocalBufferPass());
         pm.addPass(scalehls::createLowerCopyToAffinePass());
         pm.addPass(memref::createFoldMemRefAliasOpsPass());
-        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(affine::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 8)
@@ -272,7 +275,7 @@ void scalehls::registerHIDAPyTorchPipeline() {
         pm.addPass(scalehls::createParallelizeDataflowNodePass(
             opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true,
             opts.complexityAware, opts.correlationAware));
-        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(affine::createSimplifyAffineStructuresPass());
         pm.addPass(scalehls::createLegalizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -319,7 +322,7 @@ void scalehls::registerHIDAPyTorchPipelinePost() {
               opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
           // pm.addPass(scalehls::createAffineLoopUnrollJamPass(
           //     opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true));
-          pm.addPass(mlir::createSimplifyAffineStructuresPass());
+          pm.addPass(affine::createSimplifyAffineStructuresPass());
           pm.addPass(mlir::createCanonicalizerPass());
         }
 
@@ -398,7 +401,7 @@ void scalehls::registerHIDACppPipeline() {
         pm.addPass(scalehls::createRemoveVariableBoundPass());
         pm.addPass(scalehls::createAffineLoopOrderOptPass());
         // pm.addPass(scalehls::createAffineLoopTilePass(opts.loopTileSize));
-        pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        pm.addPass(affine::createSimplifyAffineStructuresPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
         if (opts.debugPoint == 7)
@@ -409,7 +412,7 @@ void scalehls::registerHIDACppPipeline() {
         // pm.addPass(scalehls::createCreateLocalBufferPass());
         // pm.addPass(scalehls::createLowerCopyToAffinePass());
         // pm.addPass(memref::createFoldMemRefAliasOpsPass());
-        // pm.addPass(mlir::createSimplifyAffineStructuresPass());
+        // pm.addPass(affine::createSimplifyAffineStructuresPass());
         // pm.addPass(mlir::createCanonicalizerPass());
 
         // if (opts.debugPoint == 8)
@@ -443,7 +446,7 @@ void scalehls::registerHIDACppPipeline() {
           pm.addPass(scalehls::createParallelizeDataflowNodePass(
               opts.loopUnrollFactor, /*unrollPointLoopOnly=*/true,
               opts.complexityAware, opts.correlationAware));
-          pm.addPass(mlir::createSimplifyAffineStructuresPass());
+          pm.addPass(affine::createSimplifyAffineStructuresPass());
           pm.addPass(mlir::createCanonicalizerPass());
         }
 

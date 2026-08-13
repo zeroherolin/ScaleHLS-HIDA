@@ -18,4 +18,6 @@ target_link_libraries(scalehls-translate
 
   MLIRHLS
   MLIRScaleHLSEmitHLSCpp
+  MLIRRegisterAllDialects
+  MLIRRegisterAllExtensions
   )

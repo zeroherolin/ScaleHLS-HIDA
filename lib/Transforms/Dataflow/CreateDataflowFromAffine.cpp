@@ -8,7 +8,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CREATEDATAFLOWFROMAFFINE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -65,7 +74,7 @@ struct TaskPartition : public OpRewritePattern<DispatchOp> {
 
 namespace {
 struct CreateDataflowFromAffine
-    : public CreateDataflowFromAffineBase<CreateDataflowFromAffine> {
+    : public scalehls::impl::CreateDataflowFromAffineBase<CreateDataflowFromAffine> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

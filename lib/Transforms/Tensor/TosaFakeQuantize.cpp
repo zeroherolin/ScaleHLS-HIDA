@@ -6,16 +6,24 @@
 
 #include "scalehls/Transforms/Passes.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_TOSAFAKEQUANTIZE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 
 static Type getQuantizeType(Type type) {
   auto i8Type = IntegerType::get(type.getContext(), 8);
-  if (type.isa<Float32Type>())
+  if (isa<Float32Type>(type))
     return i8Type;
 
-  if (auto tensorType = type.dyn_cast<RankedTensorType>())
-    if (tensorType.getElementType().isa<Float32Type>())
+  if (auto tensorType = dyn_cast<RankedTensorType>(type))
+    if (isa<Float32Type>(tensorType.getElementType()))
       return RankedTensorType::get(tensorType.getShape(), i8Type);
 
   return nullptr;
@@ -25,7 +33,7 @@ namespace {
 /// This pass is only for testing use!!! To really support quantized model,
 /// first we need to have front-ends, such as Torch-MLIR, to support the model
 /// quantization, which has not came true unfortunately.
-struct TosaFakeQuantize : public TosaFakeQuantizeBase<TosaFakeQuantize> {
+struct TosaFakeQuantize : public scalehls::impl::TosaFakeQuantizeBase<TosaFakeQuantize> {
   void runOnOperation() override {
     auto module = getOperation();
 
@@ -47,32 +55,17 @@ struct TosaFakeQuantize : public TosaFakeQuantizeBase<TosaFakeQuantize> {
           if (auto constant = dyn_cast<tosa::ConstOp>(op)) {
             // Because we are not trying to really quantize the model, here we
             // just assign a fake value to the constant operation.
-            SmallVector<int8_t, 64> list(constant.getValue().size(), fakeIdx++);
+            SmallVector<int8_t, 64> list(constant.getValues().size(), fakeIdx++);
             // for (auto value : constant.valueAttr().getValues<float>())
             //   list.push_back(value);
 
-            auto quantValue = DenseIntElementsAttr::get(quantType, list);
-            constant->setAttr(constant.getValueAttrName(), quantValue);
+            auto quantValue = DenseIntElementsAttr::get(cast<ShapedType>(quantType), list);
+            constant->setAttr(constant.getValuesAttrName(), quantValue);
           }
 
-          if (auto conv2d = dyn_cast<tosa::Conv2DOp>(op)) {
-            auto quantInfoAttr =
-                tosa::ConvOpQuantizationAttr::get(conv2d.getContext(), 0, 0);
-            conv2d->setAttr(conv2d.getQuantizationInfoAttrName(),
-                            quantInfoAttr);
-
-          } else if (auto matMul = dyn_cast<tosa::MatMulOp>(op)) {
-            auto quantInfoAttr =
-                tosa::MatMulOpQuantizationAttr::get(matMul.getContext(), 0, 0);
-            matMul->setAttr(matMul.getQuantizationInfoAttrName(),
-                            quantInfoAttr);
-
-          } else if (auto pool2d = dyn_cast<tosa::AvgPool2dOp>(op)) {
-            auto quantInfoAttr =
-                tosa::UnaryOpQuantizationAttr::get(pool2d.getContext(), 0, 0);
-            pool2d->setAttr(pool2d.getQuantizationInfoAttrName(),
-                            quantInfoAttr);
-          }
+          // Upstream TOSA removed the quantization_info attribute in
+          // favour of explicit zero-point operands; the zero-valued
+          // fake quantization info is simply dropped here.
         }
 
       // As we have updated the type of all values in the function, we can

@@ -9,6 +9,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_PLACEDATAFLOWBUFFER
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -42,7 +50,7 @@ struct PlaceBuffer : public OpRewritePattern<func::FuncOp> {
   LogicalResult matchAndRewrite(func::FuncOp func,
                                 PatternRewriter &rewriter) const override {
     for (auto arg : func.getArguments())
-      if (auto type = arg.getType().dyn_cast<MemRefType>())
+      if (auto type = dyn_cast<MemRefType>(arg.getType()))
         arg.setType(getPlacedType(type, false));
 
     func.walk([&](hls::BufferLikeInterface buffer) {
@@ -92,7 +100,7 @@ struct HoistDramBuffer
 
 namespace {
 struct PlaceDataflowBuffer
-    : public PlaceDataflowBufferBase<PlaceDataflowBuffer> {
+    : public scalehls::impl::PlaceDataflowBufferBase<PlaceDataflowBuffer> {
   PlaceDataflowBuffer() = default;
   explicit PlaceDataflowBuffer(unsigned argThreshold,
                                bool argPlaceExternalBuffer) {
@@ -106,7 +114,9 @@ struct PlaceDataflowBuffer
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<PlaceBuffer>(context, threshold, placeExternalBuffer);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    (void)applyOpPatternsGreedily(
+        ArrayRef<Operation *>{func.getOperation()},
+        std::move(patterns));
 
     patterns.clear();
     patterns.add<HoistDramBuffer>(context);

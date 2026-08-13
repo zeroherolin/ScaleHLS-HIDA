@@ -7,7 +7,16 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_MATERIALIZEREDUCTION
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -23,7 +32,7 @@ struct MaterializeReductionPattern : public OpRewritePattern<AffineForOp> {
     auto yield = cast<AffineYieldOp>(loop.getBody()->getTerminator());
 
     // Traverse all iteration values.
-    for (auto zip : llvm::zip(loop.getIterOperands(), loop.getRegionIterArgs(),
+    for (auto zip : llvm::zip(loop.getInits(), loop.getRegionIterArgs(),
                               yield.getOperands(), loop.getResults())) {
       auto iterOperand = std::get<0>(zip);
       auto iterArg = std::get<1>(zip);
@@ -58,7 +67,8 @@ struct MaterializeReductionPattern : public OpRewritePattern<AffineForOp> {
     rewriter.setInsertionPoint(loop);
     auto newLoop = rewriter.create<AffineForOp>(
         loop.getLoc(), loop.getLowerBoundOperands(), loop.getLowerBoundMap(),
-        loop.getUpperBoundOperands(), loop.getUpperBoundMap(), loop.getStep());
+        loop.getUpperBoundOperands(), loop.getUpperBoundMap(),
+        loop.getStepAsInt());
     auto &loopOps = loop.getBody()->getOperations();
     auto &newLoopOps = newLoop.getBody()->getOperations();
     newLoopOps.splice(newLoopOps.begin(), loopOps, loopOps.begin(),
@@ -74,7 +84,7 @@ struct MaterializeReductionPattern : public OpRewritePattern<AffineForOp> {
 
 namespace {
 struct MaterializeReduction
-    : public MaterializeReductionBase<MaterializeReduction> {
+    : public scalehls::impl::MaterializeReductionBase<MaterializeReduction> {
   void runOnOperation() override {
     auto func = getOperation();
     mlir::RewritePatternSet patterns(func.getContext());

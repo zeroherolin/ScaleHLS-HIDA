@@ -9,6 +9,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CREATEDATAFLOWFROMTOSA
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -111,7 +119,7 @@ struct FuseConstant : public OpRewritePattern<tosa::ConstOp> {
 
 namespace {
 struct CreateDataflowFromTosa
-    : public CreateDataflowFromTosaBase<CreateDataflowFromTosa> {
+    : public scalehls::impl::CreateDataflowFromTosaBase<CreateDataflowFromTosa> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -126,7 +134,7 @@ struct CreateDataflowFromTosa
     patterns.add<OutlineRoot<tosa::MulOp>>(context);
     patterns.add<OutlineRoot<tosa::SubOp>>(context);
     patterns.add<OutlineRoot<tosa::AddOp>>(context);
-    patterns.add<OutlineRoot<tosa::DivOp>>(context);
+    patterns.add<OutlineRoot<tosa::IntDivOp>>(context);
     patterns.add<BackwardFuse<tosa::RsqrtOp>>(context);
     patterns.add<BackwardFuse<tosa::ClampOp>>(context);
     patterns.add<BackwardFuse<tosa::TransposeOp>>(context);

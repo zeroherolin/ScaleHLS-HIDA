@@ -5,11 +5,21 @@
 //===----------------------------------------------------------------------===//
 
 #include "mlir/Dialect/Affine/Analysis/AffineAnalysis.h"
+#include "mlir/Dialect/Vector/Transforms/LoweringPatterns.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_FUNCPREPROCESS
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -53,10 +63,10 @@ struct MemrefStoreRaisePattern : public OpRewritePattern<memref::StoreOp> {
 
 namespace {
 struct AffineStoreUndefFoldPattern
-    : public OpRewritePattern<mlir::AffineStoreOp> {
-  using OpRewritePattern<mlir::AffineStoreOp>::OpRewritePattern;
+    : public OpRewritePattern<mlir::affine::AffineStoreOp> {
+  using OpRewritePattern<mlir::affine::AffineStoreOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(mlir::AffineStoreOp store,
+  LogicalResult matchAndRewrite(mlir::affine::AffineStoreOp store,
                                 PatternRewriter &rewriter) const override {
     if (store.getValueToStore().getDefiningOp<LLVM::UndefOp>()) {
       store.emitWarning("undef memory store is folded");
@@ -92,7 +102,7 @@ struct AddIRaisePattern : public OpRewritePattern<arith::AddIOp> {
     r.setInsertionPoint(add);
 
     if (isValidDim(add.getLhs()) && isValidDim(add.getRhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<mlir::affine::AffineApplyOp>(
           add, r.getAffineDimExpr(0) + r.getAffineDimExpr(1),
           ValueRange({add.getLhs(), add.getRhs()}));
       return success();
@@ -100,14 +110,14 @@ struct AddIRaisePattern : public OpRewritePattern<arith::AddIOp> {
 
     if (auto rhs = add.getRhs().getDefiningOp<arith::ConstantIndexOp>();
         rhs && isValidDim(add.getLhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<mlir::affine::AffineApplyOp>(
           add, r.getAffineDimExpr(0) + rhs.value(), add.getLhs());
       return success();
     }
 
     if (auto lhs = add.getLhs().getDefiningOp<arith::ConstantIndexOp>();
         lhs && isValidDim(add.getRhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<mlir::affine::AffineApplyOp>(
           add, lhs.value() + r.getAffineDimExpr(0), add.getRhs());
       return success();
     }
@@ -127,14 +137,14 @@ struct MulIRaisePattern : public OpRewritePattern<arith::MulIOp> {
 
     if (auto rhs = mul.getRhs().getDefiningOp<arith::ConstantIndexOp>();
         rhs && isValidDim(mul.getLhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<mlir::affine::AffineApplyOp>(
           mul, r.getAffineDimExpr(0) * rhs.value(), mul.getLhs());
       return success();
     }
 
     if (auto lhs = mul.getLhs().getDefiningOp<arith::ConstantIndexOp>();
         lhs && isValidDim(mul.getRhs())) {
-      r.replaceOpWithNewOp<mlir::AffineApplyOp>(
+      r.replaceOpWithNewOp<mlir::affine::AffineApplyOp>(
           mul, lhs.value() * r.getAffineDimExpr(0), mul.getRhs());
       return success();
     }
@@ -169,7 +179,7 @@ bool scalehls::applyFuncPreprocess(func::FuncOp func, bool isTopFunc) {
   // TODO: We should introduce pointer types here.
   // auto returnOp = func.front().getTerminator();
   // for (auto &use : llvm::make_early_inc_range(returnOp->getOpOperands()))
-  //   if (use.get().dyn_cast<BlockArgument>() ||
+  //   if (dyn_cast<BlockArgument>(use.get()) ||
   //       isa<arith::ConstantOp>(use.get().getDefiningOp())) {
   //     builder.setInsertionPoint(returnOp);
   //     auto value = builder.create<DataflowBufferOp>(
@@ -199,7 +209,7 @@ bool scalehls::applyFuncPreprocess(func::FuncOp func, bool isTopFunc) {
 }
 
 namespace {
-struct FuncPreprocess : public FuncPreprocessBase<FuncPreprocess> {
+struct FuncPreprocess : public scalehls::impl::FuncPreprocessBase<FuncPreprocess> {
   FuncPreprocess() = default;
   FuncPreprocess(std::string hlsTopFunc) { topFunc = hlsTopFunc; }
 

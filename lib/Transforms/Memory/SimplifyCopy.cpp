@@ -10,6 +10,14 @@
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/Debug.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_SIMPLIFYCOPY
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 #define DEBUG_TYPE "scalehls-simplify-copy"
 
 using namespace mlir;
@@ -22,8 +30,8 @@ struct SplitElementwiseGenericOp : public OpRewritePattern<linalg::GenericOp> {
 
   LogicalResult matchAndRewrite(linalg::GenericOp op,
                                 PatternRewriter &rewriter) const override {
-    if (isElementwiseGenericOp(op) && op.getNumInputs() == 1 &&
-        op.getNumOutputs() == 1) {
+    if (isElementwiseGenericOp(op) && op.getNumDpsInputs() == 1 &&
+        op.getNumDpsInits() == 1) {
       auto &input = op->getOpOperand(0);
       auto &output = op->getOpOperand(1);
       if (input.get() == output.get())
@@ -57,8 +65,8 @@ struct SimplifyBufferCopy : public OpRewritePattern<memref::CopyOp> {
 
     // If the source and target buffers are allocated in different memory space,
     // return failure.
-    auto sourceType = copy.getSource().getType().template cast<MemRefType>();
-    auto targetType = copy.getTarget().getType().template cast<MemRefType>();
+    auto sourceType = cast<MemRefType>(copy.getSource().getType());
+    auto targetType = cast<MemRefType>(copy.getTarget().getType());
     if (sourceType.getMemorySpaceAsInt() != targetType.getMemorySpaceAsInt())
       return failure();
 
@@ -192,7 +200,7 @@ struct SimplifyBufferCopy : public OpRewritePattern<memref::CopyOp> {
 } // namespace
 
 namespace {
-struct SimplifyCopy : public SimplifyCopyBase<SimplifyCopy> {
+struct SimplifyCopy : public scalehls::impl::SimplifyCopyBase<SimplifyCopy> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

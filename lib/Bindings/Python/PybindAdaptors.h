@@ -25,7 +25,6 @@
 #include "mlir-c/Bindings/Python/Interop.h"
 #include "mlir-c/IR.h"
 
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/Twine.h"
 
 namespace py = pybind11;
@@ -36,7 +35,7 @@ namespace pybind11 {
 namespace detail {
 
 // template <typename T>
-// struct type_caster<llvm::Optional<T>> : optional_caster<llvm::Optional<T>>
+// struct type_caster<std::optional<T>> : optional_caster<std::optional<T>>
 // {};
 
 /// Helper to convert a presumed MLIR API object to a capsule, accepting either
@@ -123,7 +122,7 @@ template <> struct type_caster<MlirContext> {
 };
 
 /// Casts object <-> MlirLocation.
-// TODO: Coerce None to default MlirLocation.
+// TODO: Coerce std::nullopt to default MlirLocation.
 template <> struct type_caster<MlirLocation> {
   PYBIND11_TYPE_CASTER(MlirLocation, _("MlirLocation"));
   bool load(handle src, bool) {
@@ -360,7 +359,7 @@ public:
                                                    py::object otherType) {
           MlirAttribute rawAttribute = py::cast<MlirAttribute>(otherType);
           if (!isaFunction(rawAttribute)) {
-            auto origRepr = py::repr(otherType).cast<std::string>();
+            auto origRepr = cast<std::string>(py::repr(otherType));
             throw std::invalid_argument(
                 (llvm::Twine("Cannot cast attribute to ") + captureTypeName +
                  " (from " + origRepr + ")")
@@ -411,7 +410,7 @@ public:
                                                    py::object otherType) {
           MlirType rawType = py::cast<MlirType>(otherType);
           if (!isaFunction(rawType)) {
-            auto origRepr = py::repr(otherType).cast<std::string>();
+            auto origRepr = cast<std::string>(py::repr(otherType));
             throw std::invalid_argument((llvm::Twine("Cannot cast type to ") +
                                          captureTypeName + " (from " +
                                          origRepr + ")")

@@ -8,13 +8,22 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CREATELOCALBUFFER
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
 namespace {
 struct CreateLocalBuffer
-    : public scalehls::CreateLocalBufferBase<CreateLocalBuffer> {
+    : public scalehls::impl::CreateLocalBufferBase<CreateLocalBuffer> {
   CreateLocalBuffer() = default;
   CreateLocalBuffer(bool argExternalBufferOnly, bool argRegisterOnly) {
     externalBufferOnly = argExternalBufferOnly;

@@ -9,7 +9,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_AFFINELOOPUNROLLJAM
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 /// Fully unroll all loops insides of a block.
@@ -64,7 +73,7 @@ bool scalehls::applyLoopUnrollJam(AffineLoopBand &band,
 
 namespace {
 struct AffineLoopUnrollJam
-    : public AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
+    : public scalehls::impl::AffineLoopUnrollJamBase<AffineLoopUnrollJam> {
   AffineLoopUnrollJam() = default;
   AffineLoopUnrollJam(unsigned loopUnrollFactor, bool unrollPointLoopOnly) {
     unrollFactor = loopUnrollFactor;

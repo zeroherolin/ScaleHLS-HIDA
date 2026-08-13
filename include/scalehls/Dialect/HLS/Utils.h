@@ -18,7 +18,7 @@ namespace scalehls {
 
 using namespace hls;
 
-using AffineLoopBand = SmallVector<AffineForOp, 6>;
+using AffineLoopBand = SmallVector<affine::AffineForOp, 6>;
 using AffineLoopBands = std::vector<AffineLoopBand>;
 using FactorList = SmallVector<unsigned, 8>;
 
@@ -39,7 +39,7 @@ bool isUnknown(MemRefType type);
 //===----------------------------------------------------------------------===//
 
 /// Get the root affine loop contained by the node.
-AffineForOp getNodeRootLoop(NodeOp currentNode);
+affine::AffineForOp getNodeRootLoop(NodeOp currentNode);
 
 /// Get the affine loop band contained by the node.
 AffineLoopBand getNodeLoopBand(NodeOp currentNode);
@@ -102,7 +102,7 @@ bool isElementwiseGenericOp(linalg::GenericOp op);
 
 /// Reduces each tile size to the largest divisor of the corresponding trip
 /// count (if the trip count is known).
-void adjustToDivisorsOfTripCounts(ArrayRef<AffineForOp> band,
+void adjustToDivisorsOfTripCounts(ArrayRef<affine::AffineForOp> band,
                                   SmallVectorImpl<unsigned> *tileSizes);
 
 /// The current op or contained ops have effect on external buffers.
@@ -112,29 +112,29 @@ bool hasEffectOnExternalBuffer(Operation *op);
 /// so that we can apply vectorize, unroll and jam, etc.
 FactorList
 getDistributedFactors(unsigned factor,
-                      const SmallVectorImpl<mlir::AffineForOp> &band);
+                      const SmallVectorImpl<mlir::affine::AffineForOp> &band);
 
 /// Distribute the given factor evenly on all loop levels. The generated factors
 /// are garanteed to be divisors of the factors in given "costrFactorsList".
 /// This method can fail due to non-constant loop bounds.
 LogicalResult
 getEvenlyDistributedFactors(unsigned maxFactor, FactorList &factors,
-                            const SmallVectorImpl<mlir::AffineForOp> &band,
+                            const SmallVectorImpl<mlir::affine::AffineForOp> &band,
                             const SmallVectorImpl<FactorList> &constrFactors,
                             bool powerOf2Constr = false);
 
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.
-std::pair<bool, bool> ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp);
+std::pair<bool, bool> ifAlwaysTrueOrFalse(mlir::affine::AffineIfOp ifOp);
 
 /// Check whether the two given if statements have the same condition.
-bool checkSameIfStatement(AffineIfOp lhsOp, AffineIfOp rhsOp);
+bool checkSameIfStatement(affine::AffineIfOp lhsOp, affine::AffineIfOp rhsOp);
 
 /// Parse array attributes.
 SmallVector<int64_t, 8> getIntArrayAttrValue(Operation *op, StringRef name);
 
-/// For storing all affine memory access operations (including AffineLoadOp, and
-/// AffineStoreOp) indexed by the corresponding memref.
+/// For storing all affine memory access operations (including affine::AffineLoadOp, and
+/// affine::AffineStoreOp) indexed by the corresponding memref.
 using MemAccessesMap = DenseMap<Value, SmallVector<Operation *, 16>>;
 
 /// Collect all load and store operations in the block and return them in "map".
@@ -145,15 +145,15 @@ bool crossRegionDominates(Operation *a, Operation *b);
 
 /// Check if the lhsOp and rhsOp are in the same block. If so, return their
 /// ancestors that are located at the same block. Note that in this check,
-/// AffineIfOp is transparent.
-Optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
+/// affine::AffineIfOp is transparent.
+std::optional<std::pair<Operation *, Operation *>> checkSameLevel(Operation *lhsOp,
                                                              Operation *rhsOp);
 
 unsigned getCommonSurroundingLoops(Operation *A, Operation *B,
                                    AffineLoopBand *band);
 
 /// Calculate the upper and lower bound of the affine map if possible.
-Optional<std::pair<int64_t, int64_t>> getBoundOfAffineMap(AffineMap map,
+std::optional<std::pair<int64_t, int64_t>> getBoundOfAffineMap(AffineMap map,
                                                           ValueRange operands);
 
 /// Calculate partition factors through analyzing the "memrefType" and return
@@ -181,8 +181,8 @@ bool getParallelAndReductionLoopBand(const AffineLoopBand &band,
 /// Get the whole loop band given the outermost or innermost loop and return it
 /// in "band". Meanwhile, the return value is the innermost or outermost loop of
 /// this loop band.
-AffineForOp getLoopBandFromOutermost(AffineForOp forOp, AffineLoopBand &band);
-AffineForOp getLoopBandFromInnermost(AffineForOp forOp, AffineLoopBand &band);
+affine::AffineForOp getLoopBandFromOutermost(affine::AffineForOp forOp, AffineLoopBand &band);
+affine::AffineForOp getLoopBandFromInnermost(affine::AffineForOp forOp, AffineLoopBand &band);
 
 /// Collect all loop bands in the "block" and return them in "bands". If
 /// "allowHavingChilds" is true, loop bands containing more than 1 other loop
@@ -194,7 +194,7 @@ void getLoopBands(Block &block, AffineLoopBands &bands,
 void getArrays(Block &block, SmallVectorImpl<Value> &arrays,
                bool allowArguments = true);
 
-Optional<unsigned> getAverageTripCount(AffineForOp forOp);
+std::optional<unsigned> getAverageTripCount(affine::AffineForOp forOp);
 
 bool checkDependence(Operation *A, Operation *B);
 
@@ -251,10 +251,10 @@ bool hasNoInterveningEffect(Operation *start, Operation *memOp, Value memref) {
 
       // If the side effect comes from an affine read or write, try to prove the
       // side effecting `op` cannot reach `memOp`.
-      if (isa<AffineReadOpInterface, AffineWriteOpInterface>(op) &&
-          isa<AffineReadOpInterface, AffineWriteOpInterface>(memOp)) {
-        MemRefAccess srcAccess(op);
-        MemRefAccess destAccess(memOp);
+      if (isa<affine::AffineReadOpInterface, affine::AffineWriteOpInterface>(op) &&
+          isa<affine::AffineReadOpInterface, affine::AffineWriteOpInterface>(memOp)) {
+        affine::MemRefAccess srcAccess(op);
+        affine::MemRefAccess destAccess(memOp);
 
         // FIXME: This is unsafe as the two memref may be alias with each other.
         // This is also one of the most important change from the MLIR in-tree
@@ -265,16 +265,16 @@ bool hasNoInterveningEffect(Operation *start, Operation *memOp, Value memref) {
         // Affine dependence analysis here is applicable only if both ops
         // operate on the same memref and if `op`, `memOp`, and `start` are in
         // the same AffineScope.
-        if (getAffineScope(op) == getAffineScope(memOp) &&
-            getAffineScope(op) == getAffineScope(start)) {
+        if (affine::getAffineScope(op) == affine::getAffineScope(memOp) &&
+            affine::getAffineScope(op) == affine::getAffineScope(start)) {
           // Number of loops containing the start op and the ending operation.
           unsigned minSurroundingLoops =
-              getNumCommonSurroundingLoops(*start, *memOp);
+              affine::getNumCommonSurroundingLoops(*start, *memOp);
 
           // Number of loops containing the operation `op` which has the
           // potential memory side effect and can occur on a path between
           // `start` and `memOp`.
-          unsigned nsLoops = getNumCommonSurroundingLoops(*op, *memOp);
+          unsigned nsLoops = affine::getNumCommonSurroundingLoops(*op, *memOp);
 
           // For ease, let's consider the case that `op` is a store and we're
           // looking for other potential stores (e.g `op`) that overwrite memory
@@ -283,9 +283,9 @@ bool hasNoInterveningEffect(Operation *start, Operation *memOp, Value memref) {
           // minSurrounding loops since `start` would overwrite any store with a
           // smaller number of surrounding loops before.
           unsigned d;
-          FlatAffineValueConstraints dependenceConstraints;
+          affine::FlatAffineValueConstraints dependenceConstraints;
           for (d = nsLoops + 1; d > minSurroundingLoops; d--) {
-            DependenceResult result = checkMemrefAccessDependence(
+            affine::DependenceResult result = affine::checkMemrefAccessDependence(
                 srcAccess, destAccess, d, &dependenceConstraints,
                 /*dependenceComponents=*/nullptr);
             // A dependence failure or the presence of a dependence implies a
@@ -401,11 +401,11 @@ bool hasNoInterveningEffect(Operation *start, Operation *memOp, Value memref) {
 /// Encapsulates a memref load or store access information.
 struct PtrLikeMemRefAccess {
   Value memref = nullptr;
-  AffineValueMap accessMap;
+  affine::AffineValueMap accessMap;
 
   void *impl = nullptr;
 
-  /// Constructs a MemRefAccess from a load or store operation.
+  /// Constructs a affine::MemRefAccess from a load or store operation.
   explicit PtrLikeMemRefAccess(Operation *opInst);
 
   PtrLikeMemRefAccess(const void *impl) : impl(const_cast<void *>(impl)) {}

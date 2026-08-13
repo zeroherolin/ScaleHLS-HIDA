@@ -16,6 +16,7 @@
 #include "mlir/IR/IntegerSet.h"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -25,7 +26,7 @@ using namespace hls;
 
 MemoryKind scalehls::getMemoryKind(MemRefType type) {
   if (auto memorySpace = type.getMemorySpace())
-    if (auto kindAttr = memorySpace.dyn_cast<MemoryKindAttr>())
+    if (auto kindAttr = dyn_cast<MemoryKindAttr>(memorySpace))
       return kindAttr.getValue();
   return MemoryKind::UNKNOWN;
 }
@@ -79,7 +80,7 @@ AffineLoopBand scalehls::getNodeLoopBand(NodeOp currentNode) {
 /// Wrap the operations in the block with dispatch op.
 DispatchOp scalehls::dispatchBlock(Block *block) {
   if (!block->getOps<DispatchOp>().empty() ||
-      !isa<func::FuncOp, mlir::AffineForOp>(block->getParentOp()))
+      !isa<func::FuncOp, mlir::affine::AffineForOp>(block->getParentOp()))
     return DispatchOp();
 
   OpBuilder builder(block, block->begin());
@@ -239,7 +240,7 @@ SmallVector<NodeOp> scalehls::getDependentConsumers(Value buffer, NodeOp node) {
   // If the buffer is defined outside of a dependence free schedule op, we can
   // ignore back dependences.
   bool ignoreBackDependence =
-      buffer.isa<BlockArgument>() && node.getScheduleOp().isDependenceFree();
+      isa<BlockArgument>(buffer) && node.getScheduleOp().isDependenceFree();
 
   DominanceInfo domInfo;
   SmallVector<NodeOp> nodes;
@@ -316,7 +317,7 @@ scalehls::getNestedProducers(Value buffer) {
 
 /// Find buffer value or buffer op across the dataflow hierarchy.
 Value scalehls::findBuffer(Value memref) {
-  if (auto arg = memref.dyn_cast<BlockArgument>()) {
+  if (auto arg = dyn_cast<BlockArgument>(memref)) {
     if (auto node = dyn_cast<NodeOp>(arg.getParentBlock()->getParentOp()))
       return findBuffer(node->getOperand(arg.getArgNumber()));
     else if (auto schedule =
@@ -339,7 +340,7 @@ hls::BufferLikeInterface scalehls::findBufferOp(Value memref) {
 /// operation of the buffer is not a BufferOp or stream types, the returned
 /// result will be 1.
 unsigned scalehls::getBufferDepth(Value memref) {
-  if (auto streamType = memref.getType().dyn_cast<StreamType>()) {
+  if (auto streamType = dyn_cast<StreamType>(memref.getType())) {
     return streamType.getDepth();
   } else if (auto bufferOp = findBufferOp(memref))
     return bufferOp.getBufferDepth();
@@ -347,7 +348,7 @@ unsigned scalehls::getBufferDepth(Value memref) {
 }
 
 bool scalehls::isExtBuffer(Value memref) {
-  if (auto type = memref.getType().dyn_cast<MemRefType>())
+  if (auto type = dyn_cast<MemRefType>(memref.getType()))
     return isDram(type);
   return false;
 }
@@ -397,7 +398,7 @@ bool scalehls::isElementwiseGenericOp(linalg::GenericOp op) {
     return false;
 
   for (auto valueMap : llvm::zip(op.getOperands(), op.getIndexingMapsArray())) {
-    auto type = std::get<0>(valueMap).getType().dyn_cast<ShapedType>();
+    auto type = dyn_cast<ShapedType>(std::get<0>(valueMap).getType());
     auto map = std::get<1>(valueMap);
 
     // If the operand doens't have static shape, the index map must be identity.
@@ -440,7 +441,7 @@ bool scalehls::hasEffectOnExternalBuffer(Operation *op) {
 /// Distribute the given factor from the innermost loop of the given loop band,
 /// so that we can apply vectorize, unroll and jam, etc.
 FactorList scalehls::getDistributedFactors(
-    unsigned factor, const SmallVectorImpl<mlir::AffineForOp> &band) {
+    unsigned factor, const SmallVectorImpl<mlir::affine::AffineForOp> &band) {
   FactorList factors;
   unsigned remainFactor = factor;
 
@@ -472,7 +473,7 @@ FactorList scalehls::getDistributedFactors(
 /// This method can fail due to non-constant loop trip counts.
 LogicalResult scalehls::getEvenlyDistributedFactors(
     unsigned maxFactor, FactorList &factors,
-    const SmallVectorImpl<mlir::AffineForOp> &band,
+    const SmallVectorImpl<mlir::affine::AffineForOp> &band,
     const SmallVectorImpl<FactorList> &constrFactorsList, bool powerOf2Constr) {
 
   // auto emitFactors = [&](const FactorList &factors) {
@@ -635,16 +636,22 @@ LogicalResult scalehls::getEvenlyDistributedFactors(
 
 /// Return a pair which indicates whether the if statement is always true or
 /// false, respectively. The returned result is one-hot.
-std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {
+std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::affine::AffineIfOp ifOp) {
   auto set = ifOp.getIntegerSet();
   auto operands = SmallVector<Value, 4>(ifOp.getOperands().begin(),
                                         ifOp.getOperands().end());
 
-  // Compose all associated AffineApplyOp into the current if operation.
-  while (llvm::any_of(operands, [](Value v) {
-    return isa_and_nonnull<AffineApplyOp>(v.getDefiningOp());
-  })) {
-    composeSetAndOperands(set, operands);
+  // Compose all associated AffineApplyOp into the current if operation
+  // (via the map-composition API: view the set constraints as a map,
+  // fully compose, and convert back).
+  if (llvm::any_of(operands, [](Value v) {
+        return isa_and_nonnull<AffineApplyOp>(v.getDefiningOp());
+      })) {
+    auto map = AffineMap::get(set.getNumDims(), set.getNumSymbols(),
+                              set.getConstraints(), set.getContext());
+    affine::fullyComposeAffineMapAndOperands(&map, &operands);
+    set = IntegerSet::get(map.getNumDims(), map.getNumSymbols(),
+                          map.getResults(), set.getEqFlags());
   }
 
   // Replace the original integer set and operands with the composed integer
@@ -657,7 +664,7 @@ std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {
   FlatAffineValueConstraints constrs;
   constrs.addAffineIfOpDomain(ifOp);
   for (auto operand : operands)
-    if (isForInductionVar(operand)) {
+    if (isAffineForInductionVar(operand)) {
       auto iv = getForInductionVarOwner(operand);
       if (failed(constrs.addAffineForOpDomain(iv)))
         continue;
@@ -673,7 +680,7 @@ std::pair<bool, bool> scalehls::ifAlwaysTrueOrFalse(mlir::AffineIfOp ifOp) {
     unsigned idx = 0;
     for (auto expr : set.getConstraints()) {
       bool eqFlag = set.isEq(idx++);
-      auto constValue = expr.cast<AffineConstantExpr>().getValue();
+      auto constValue = cast<AffineConstantExpr>(expr).getValue();
 
       if (eqFlag)
         flagList.push_back(constValue == 0);
@@ -722,7 +729,7 @@ SmallVector<int64_t, 8> scalehls::getIntArrayAttrValue(Operation *op,
   SmallVector<int64_t, 8> array;
   if (auto arrayAttr = op->getAttrOfType<ArrayAttr>(name)) {
     for (auto attr : arrayAttr)
-      if (auto intAttr = attr.dyn_cast<IntegerAttr>())
+      if (auto intAttr = dyn_cast<IntegerAttr>(attr))
         array.push_back(intAttr.getInt());
       else
         return SmallVector<int64_t, 8>();
@@ -743,11 +750,11 @@ void scalehls::getMemAccessesMap(Block &block, MemAccessesMap &map,
 
     else if (auto read = dyn_cast<vector::TransferReadOp>(op)) {
       if (includeVectorTransfer)
-        map[read.getSource()].push_back(&op);
+        map[read.getBase()].push_back(&op);
 
     } else if (auto write = dyn_cast<vector::TransferWriteOp>(op)) {
       if (includeVectorTransfer)
-        map[write.getSource()].push_back(&op);
+        map[write.getBase()].push_back(&op);
 
     } else if (op.getNumRegions()) {
       // Recursively collect memory access operations in each block.
@@ -772,7 +779,7 @@ bool scalehls::crossRegionDominates(Operation *a, Operation *b) {
 // Check if the lhsOp and rhsOp are in the same block. If so, return their
 // ancestors that are located at the same block. Note that in this check,
 // AffineIfOp is transparent.
-Optional<std::pair<Operation *, Operation *>>
+std::optional<std::pair<Operation *, Operation *>>
 scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
   // If lhsOp and rhsOp are already at the same level, return true.
   if (lhsOp->getBlock() == rhsOp->getBlock())
@@ -806,7 +813,7 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
       if (lhs->getBlock() == rhs->getBlock())
         return std::pair<Operation *, Operation *>(lhs, rhs);
 
-  return Optional<std::pair<Operation *, Operation *>>();
+  return std::optional<std::pair<Operation *, Operation *>>();
 }
 
 /// Returns the number of surrounding loops common to 'loopsA' and 'loopsB',
@@ -814,8 +821,8 @@ scalehls::checkSameLevel(Operation *lhsOp, Operation *rhsOp) {
 unsigned scalehls::getCommonSurroundingLoops(Operation *A, Operation *B,
                                              AffineLoopBand *band) {
   SmallVector<AffineForOp, 4> loopsA, loopsB;
-  getLoopIVs(*A, &loopsA);
-  getLoopIVs(*B, &loopsB);
+  getAffineForIVs(*A, &loopsA);
+  getAffineForIVs(*B, &loopsB);
 
   unsigned minNumLoops = std::min(loopsA.size(), loopsB.size());
   unsigned numCommonLoops = 0;
@@ -830,7 +837,7 @@ unsigned scalehls::getCommonSurroundingLoops(Operation *A, Operation *B,
 }
 
 /// Calculate the lower and upper bound of the affine map if possible.
-Optional<std::pair<int64_t, int64_t>>
+std::optional<std::pair<int64_t, int64_t>>
 scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
   if (map.isSingleConstant()) {
     auto constBound = map.getSingleConstantResult();
@@ -839,7 +846,7 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
 
   // For now, we can only handle one result value map.
   if (map.getNumResults() != 1)
-    return Optional<std::pair<int64_t, int64_t>>();
+    return std::optional<std::pair<int64_t, int64_t>>();
 
   auto context = map.getContext();
   SmallVector<int64_t, 4> lbs;
@@ -847,18 +854,18 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
   for (auto operand : operands) {
     // Only if the affine map operands are induction variable, the calculation
     // is possible.
-    if (!isForInductionVar(operand))
-      return Optional<std::pair<int64_t, int64_t>>();
+    if (!isAffineForInductionVar(operand))
+      return std::optional<std::pair<int64_t, int64_t>>();
 
     // Only if the owner for op of the induction variable has constant bound,
     // the calculation is possible.
     auto forOp = getForInductionVarOwner(operand);
     if (!forOp.hasConstantBounds())
-      return Optional<std::pair<int64_t, int64_t>>();
+      return std::optional<std::pair<int64_t, int64_t>>();
 
     auto lb = forOp.getConstantLowerBound();
     auto ub = forOp.getConstantUpperBound();
-    auto step = forOp.getStep();
+    auto step = forOp.getStepAsInt();
 
     lbs.push_back(lb);
     ubs.push_back(ub - 1 - (ub - 1 - lb) % step);
@@ -877,10 +884,10 @@ scalehls::getBoundOfAffineMap(AffineMap map, ValueRange operands) {
     }
     auto newExpr = map.getResult(0).replaceDimsAndSymbols(replacements, {});
 
-    if (auto constExpr = newExpr.dyn_cast<AffineConstantExpr>())
+    if (auto constExpr = dyn_cast<AffineConstantExpr>(newExpr))
       results.push_back(constExpr.getValue());
     else
-      return Optional<std::pair<int64_t, int64_t>>();
+      return std::optional<std::pair<int64_t, int64_t>>();
   }
 
   auto minmax = std::minmax_element(results.begin(), results.end());
@@ -908,7 +915,7 @@ bool scalehls::isFullyPartitioned(MemRefType memrefType) {
 int64_t scalehls::getPartitionFactors(MemRefType memrefType,
                                       SmallVectorImpl<int64_t> *factors) {
   int64_t accumFactor = 1;
-  if (auto attr = memrefType.getLayout().dyn_cast<PartitionLayoutAttr>())
+  if (auto attr = dyn_cast<PartitionLayoutAttr>(memrefType.getLayout()))
     for (auto factor : attr.getActualFactors(memrefType.getShape())) {
       accumFactor *= factor;
       if (factors)
@@ -1054,7 +1061,7 @@ void scalehls::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
   // Collect argument arrays.
   if (allowArguments)
     for (auto arg : block.getArguments()) {
-      if (arg.getType().isa<MemRefType>())
+      if (isa<MemRefType>(arg.getType()))
         arrays.push_back(arg);
     }
 
@@ -1065,7 +1072,7 @@ void scalehls::getArrays(Block &block, SmallVectorImpl<Value> &arrays,
   }
 }
 
-Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
+std::optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
   if (auto optionalTripCount = getConstantTripCount(forOp))
     return optionalTripCount.value();
   else {
@@ -1084,7 +1091,7 @@ Optional<unsigned> scalehls::getAverageTripCount(AffineForOp forOp) {
           upperBound.value().first - lowerBound.value().second;
       return (lowerTripCount + upperTripCount + 1) / 2;
     } else
-      return Optional<unsigned>();
+      return std::optional<unsigned>();
   }
 }
 

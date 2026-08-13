@@ -8,16 +8,25 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_BUFFERVECTORIZE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
 /// Get the vectorized type of the given memref. Specifically, the vectorized
 /// memref type always has 1-D vector elements.
 static MemRefType getVectorizedType(MemRefType type) {
-  auto layout = type.getLayout().dyn_cast<TileLayoutAttr>();
+  auto layout = dyn_cast<TileLayoutAttr>(type.getLayout());
   if (!layout || !layout.isVectorized() ||
-      type.getElementType().dyn_cast<VectorType>())
+      dyn_cast<VectorType>(type.getElementType()))
     return MemRefType();
 
   // Calculate the shape of the new memref with vector elements.
@@ -44,7 +53,7 @@ static LogicalResult vectorizeMemref(Value memref) {
     return failure();
 
   // Apply new memref type with buffer layout.
-  auto type = memref.getType().cast<MemRefType>();
+  auto type = cast<MemRefType>(memref.getType());
   auto newType = MemRefType::get(type.getShape(), type.getElementType(), layout,
                                  type.getMemorySpace());
   memref.setType(newType);
@@ -109,7 +118,7 @@ struct VectorizeNode : public OpRewritePattern<NodeOp> {
     bool hasChanged = false;
     for (auto [operand, arg] :
          llvm::zip(node->getOpOperands(), node.getBody().getArguments()))
-      if (auto type = arg.getType().dyn_cast<MemRefType>())
+      if (auto type = dyn_cast<MemRefType>(arg.getType()))
         if (auto vectorizedType = getVectorizedType(type)) {
           arg.setType(vectorizedType);
 
@@ -140,7 +149,7 @@ struct VectorizeSchedule : public OpRewritePattern<ScheduleOp> {
     bool hasChanged = false;
     for (auto [operand, arg] : llvm::zip(schedule->getOpOperands(),
                                          schedule.getBody().getArguments()))
-      if (auto type = arg.getType().dyn_cast<MemRefType>())
+      if (auto type = dyn_cast<MemRefType>(arg.getType()))
         if (auto vectorizedType = getVectorizedType(type)) {
           arg.setType(vectorizedType);
 
@@ -216,8 +225,8 @@ struct VectorizeTransferRead : public OpRewritePattern<vector::TransferReadOp> {
 
   LogicalResult matchAndRewrite(vector::TransferReadOp read,
                                 PatternRewriter &rewriter) const override {
-    if (auto type = read.getShapedType().dyn_cast<MemRefType>()) {
-      if (isExtBuffer(read.getSource())) {
+    if (auto type = dyn_cast<MemRefType>(read.getShapedType())) {
+      if (isExtBuffer(read.getBase())) {
         // For external buffers, we convert the transfer_read op to an affine
         // load op that loads a vector from a vectorized buffer.
         if (auto vectorizedType = getVectorizedType(type)) {
@@ -234,7 +243,7 @@ struct VectorizeTransferRead : public OpRewritePattern<vector::TransferReadOp> {
           // explicitly cast the load result back to the resulting shape of
           // transfer read.
           auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
-              read.getLoc(), vectorizedType, read.getSource());
+              read.getLoc(), vectorizedType, read.getBase());
           auto vectorLoad = rewriter.create<AffineLoadOp>(
               read.getLoc(), vectorBuffer, vectorIndices);
           rewriter.replaceOpWithNewOp<vector::ShapeCastOp>(
@@ -262,7 +271,7 @@ struct VectorizeTransferRead : public OpRewritePattern<vector::TransferReadOp> {
             return failure();
 
           auto scalarLoad = rewriter.create<AffineLoadOp>(
-              read.getLoc(), read.getSource(), scalarIndices);
+              read.getLoc(), read.getBase(), scalarIndices);
           newVector = rewriter.create<vector::InsertOp>(
               read.getLoc(), scalarLoad, newVector,
               rewriter.getI64ArrayAttr({i}));
@@ -286,12 +295,12 @@ struct VectorizeTransferWrite
 
   LogicalResult matchAndRewrite(vector::TransferWriteOp write,
                                 PatternRewriter &rewriter) const override {
-    if (auto type = write.getShapedType().dyn_cast<MemRefType>()) {
-      if (isExtBuffer(write.getSource())) {
+    if (auto type = dyn_cast<MemRefType>(write.getShapedType())) {
+      if (isExtBuffer(write.getBase())) {
         // For external buffers, we convert the transfer_write op to an affine
         // store op that stores a vector into a vectorized buffer.
         if (auto vectorizedType = getVectorizedType(type)) {
-          auto layout = type.getLayout().cast<TileLayoutAttr>();
+          auto layout = cast<TileLayoutAttr>(type.getLayout());
           rewriter.setInsertionPoint(write);
 
           // Calculate the new indices of affine store.
@@ -305,7 +314,7 @@ struct VectorizeTransferWrite
           // explicitly cast the input value of transfer write to the 1-D vector
           // shape.
           auto vectorBuffer = rewriter.create<BufferVectorizeOp>(
-              write.getLoc(), vectorizedType, write.getSource());
+              write.getLoc(), vectorizedType, write.getBase());
           auto vectorToStore = rewriter.create<vector::ShapeCastOp>(
               write.getLoc(), vectorizedType.getElementType(),
               write.getVector());
@@ -333,7 +342,7 @@ struct VectorizeTransferWrite
           auto scalar = rewriter.create<vector::ExtractOp>(
               write.getLoc(), newVector, rewriter.getI64ArrayAttr({i}));
           rewriter.create<AffineStoreOp>(write.getLoc(), scalar,
-                                         write.getSource(), scalarIndices);
+                                         write.getBase(), scalarIndices);
         }
         rewriter.eraseOp(write);
         return success();
@@ -352,7 +361,7 @@ struct VectorizeLoad : public OpRewritePattern<AffineLoadOp> {
                                 PatternRewriter &rewriter) const override {
     auto type = load.getMemRefType();
     if (auto vectorizedType = getVectorizedType(type)) {
-      auto layout = type.getLayout().cast<TileLayoutAttr>();
+      auto layout = cast<TileLayoutAttr>(type.getLayout());
       auto numDims = load.getAffineMap().getNumDims();
       auto numSyms = load.getAffineMap().getNumSymbols();
 
@@ -405,8 +414,9 @@ struct VectorizeLoad : public OpRewritePattern<AffineLoadOp> {
       auto offsetApply = rewriter.create<AffineApplyOp>(
           load.getLoc(), offsetMap, load.getMapOperands());
 
-      rewriter.replaceOpWithNewOp<vector::ExtractElementOp>(load, vectorLoad,
-                                                            offsetApply);
+      rewriter.replaceOpWithNewOp<vector::ExtractOp>(
+          load, vectorLoad,
+          ArrayRef<OpFoldResult>{OpFoldResult(offsetApply.getResult())});
       return success();
     }
     return failure();
@@ -429,14 +439,16 @@ struct VectorizeStore : public OpRewritePattern<AffineStoreOp> {
 } // namespace
 
 namespace {
-struct BufferVectorize : public BufferVectorizeBase<BufferVectorize> {
+struct BufferVectorize : public scalehls::impl::BufferVectorizeBase<BufferVectorize> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
 
     mlir::RewritePatternSet patterns(context);
     patterns.add<MaterializeTileLayout>(context);
-    (void)applyOpPatternsAndFold(func, std::move(patterns));
+    (void)applyOpPatternsGreedily(
+        ArrayRef<Operation *>{func.getOperation()},
+        std::move(patterns));
 
     patterns.clear();
     patterns.add<VectorizeNode>(context);

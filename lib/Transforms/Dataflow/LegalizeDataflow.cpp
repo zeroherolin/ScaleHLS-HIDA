@@ -9,7 +9,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_LEGALIZEDATAFLOW
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -82,7 +91,7 @@ static void collectBypassNodes(
   unsigned maxDiff = 1;
   for (auto node : map.lookup(targetLevel)) {
     for (auto output : node.getOutputs()) {
-      if (output.isa<BlockArgument>() &&
+      if (isa<BlockArgument>(output) &&
           node.getScheduleOp().isDependenceFree())
         continue;
 
@@ -187,7 +196,7 @@ struct FuseBypassPath : public OpRewritePattern<ScheduleOp> {
 // } // namespace
 
 namespace {
-struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
+struct LegalizeDataflow : public scalehls::impl::LegalizeDataflowBase<LegalizeDataflow> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -199,7 +208,9 @@ struct LegalizeDataflow : public LegalizeDataflowBase<LegalizeDataflow> {
     auto frozenPatterns = FrozenRewritePatternSet(std::move(patterns));
 
     func.walk([&](ScheduleOp schedule) {
-      (void)applyOpPatternsAndFold(schedule, frozenPatterns);
+      (void)applyOpPatternsGreedily(
+          ArrayRef<Operation *>{schedule.getOperation()},
+          frozenPatterns);
 
       if (llvm::all_of(schedule.getOps<NodeOp>(),
                        [](NodeOp node) { return node.getLevel(); }))

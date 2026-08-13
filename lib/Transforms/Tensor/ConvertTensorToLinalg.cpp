@@ -9,6 +9,14 @@
 #include "mlir/Transforms/DialectConversion.h"
 #include "scalehls/Transforms/Passes.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CONVERTTENSORTOLINALG
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 
@@ -27,7 +35,7 @@ struct RemoveRescaleOp : public OpRewritePattern<tosa::ApplyScaleOp> {
 
 namespace {
 struct ConvertTensorToLinalg
-    : public ConvertTensorToLinalgBase<ConvertTensorToLinalg> {
+    : public scalehls::impl::ConvertTensorToLinalgBase<ConvertTensorToLinalg> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -38,7 +46,7 @@ struct ConvertTensorToLinalg
                       linalg::FillOp, arith::ConstantOp>();
 
     mlir::RewritePatternSet patterns(context);
-    patterns.add<linalg::PadOpTransformationPattern>(context);
+    patterns.add<linalg::DecomposePadOpPattern>(context);
     patterns.add<RemoveRescaleOp>(context);
     // tosa::populateTosaRescaleToArithConversionPatterns(&patterns, true);
 

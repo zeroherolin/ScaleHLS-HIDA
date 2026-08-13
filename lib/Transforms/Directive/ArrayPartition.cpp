@@ -8,9 +8,18 @@
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/Debug.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_ARRAYPARTITION
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 #define DEBUG_TYPE "array-partition"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -49,7 +58,7 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
                                    ArrayRef<hls::PartitionKind> kinds,
                                    bool updateFuncSignature,
                                    unsigned threshold) {
-  auto arrayType = array.getType().dyn_cast<MemRefType>();
+  auto arrayType = dyn_cast<MemRefType>(array.getType());
   if (!arrayType || isExtBuffer(array) || !arrayType.hasStaticShape() ||
       (int64_t)factors.size() != arrayType.getRank() ||
       (int64_t)kinds.size() != arrayType.getRank())
@@ -78,7 +87,7 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
       arrayType.getShape());
   auto memorySpaceAttr = arrayType.getMemorySpace();
   auto kindAttr =
-      memorySpaceAttr ? memorySpaceAttr.cast<MemoryKindAttr>() : nullptr;
+      memorySpaceAttr ? cast<MemoryKindAttr>(memorySpaceAttr) : nullptr;
   if (actualDepth < threshold)
     kindAttr = MemoryKindAttr::get(array.getContext(), MemoryKind::LUTRAM_2P);
   array.setType(MemRefType::get(
@@ -124,11 +133,11 @@ static AffineValueMap getAffineValueMap(Operation *op) {
   // Get affine map from AffineLoad/Store.
   AffineMap map;
   SmallVector<Value, 4> operands;
-  if (auto loadOp = dyn_cast<mlir::AffineReadOpInterface>(op)) {
+  if (auto loadOp = dyn_cast<mlir::affine::AffineReadOpInterface>(op)) {
     operands = loadOp.getMapOperands();
     map = loadOp.getAffineMap();
 
-  } else if (auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
+  } else if (auto storeOp = dyn_cast<mlir::affine::AffineWriteOpInterface>(op)) {
     operands = storeOp.getMapOperands();
     map = storeOp.getAffineMap();
 
@@ -172,7 +181,7 @@ getDimAccessMaps(Operation *op, AffineValueMap valueMap, int64_t dim) {
 
   // Traverse each dimension of the transfered vector.
   for (unsigned i = 0, e = permuteMap.getNumResults(); i < e; ++i) {
-    auto dimExpr = permuteMap.getResult(i).dyn_cast<AffineDimExpr>();
+    auto dimExpr = dyn_cast<AffineDimExpr>(permuteMap.getResult(i));
 
     // If the permutation result of the current dimension is equal to the target
     // dimension, we push back the access map of each element of the vector into
@@ -243,7 +252,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func, unsigned threshold) {
     getMemAccessesMap(*block, accessesMap, /*includeVectorTransfer=*/true);
 
     for (auto [memref, loadStores] : accessesMap) {
-      auto memrefType = memref.getType().cast<MemRefType>();
+      auto memrefType = cast<MemRefType>(memref.getType());
       auto &partitions = partitionsMap[memref];
 
       // If the current partitionsMap is empty, initialize it with no partition.
@@ -336,7 +345,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func, unsigned threshold) {
                 simplifyAffineExpr(rhsExpr - lhsExpr, lhsIndex.getNumDims(),
                                    lhsIndex.getNumSymbols());
 
-            if (auto constDistance = newExpr.dyn_cast<AffineConstantExpr>()) {
+            if (auto constDistance = dyn_cast<AffineConstantExpr>(newExpr)) {
               LLVM_DEBUG(llvm::dbgs() << " = " << constDistance.getValue(););
 
               unsigned distance = std::abs(constDistance.getValue());
@@ -418,7 +427,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func, unsigned threshold) {
 
     for (auto [type, operand] :
          llvm::zip(subFunc.getArgumentTypes(), op.getOperands())) {
-      if (auto memrefType = type.dyn_cast<MemRefType>()) {
+      if (auto memrefType = dyn_cast<MemRefType>(type)) {
         auto &partitions = partitionsMap[operand];
 
         // If the current partitionsMap is empty, initialize it with no
@@ -428,7 +437,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func, unsigned threshold) {
               memrefType.getRank(), Partition(PartitionKind::NONE, 1));
 
         // Traverse all dimension of the memref.
-        if (auto attr = memrefType.getLayout().dyn_cast<PartitionLayoutAttr>())
+        if (auto attr = dyn_cast<PartitionLayoutAttr>(memrefType.getLayout()))
           for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
             auto kind = attr.getKinds()[dim];
             auto factor = attr.getFactors()[dim];
@@ -478,7 +487,7 @@ bool scalehls::applyAutoArrayPartition(func::FuncOp func, unsigned threshold) {
 }
 
 namespace {
-struct ArrayPartition : public ArrayPartitionBase<ArrayPartition> {
+struct ArrayPartition : public scalehls::impl::ArrayPartitionBase<ArrayPartition> {
   ArrayPartition() = default;
   explicit ArrayPartition(unsigned argThreshold) { threshold = argThreshold; }
 

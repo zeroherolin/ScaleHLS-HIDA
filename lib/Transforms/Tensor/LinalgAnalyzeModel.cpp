@@ -7,18 +7,26 @@
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_LINALGANALYZEMODEL
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 
 namespace {
-struct LinalgAnalyzeModel : public LinalgAnalyzeModelBase<LinalgAnalyzeModel> {
+struct LinalgAnalyzeModel : public scalehls::impl::LinalgAnalyzeModelBase<LinalgAnalyzeModel> {
   void runOnOperation() override {
     auto func = getOperation();
 
     // auto getIntArray = [&](ArrayAttr arrayAttr) {
     //   SmallVector<int64_t, 4> array;
     //   for (auto value : arrayAttr)
-    //     array.push_back(value.cast<IntegerAttr>().getInt());
+    //     array.push_back(cast<IntegerAttr>(value).getInt());
     //   return array;
     // };
 
@@ -28,9 +36,9 @@ struct LinalgAnalyzeModel : public LinalgAnalyzeModelBase<LinalgAnalyzeModel> {
     for (auto &op : func.getOps()) {
       if (auto convOp = dyn_cast<linalg::Conv2DNchwFchwOp>(op)) {
         auto weightShape =
-            convOp.filter().getType().cast<RankedTensorType>().getShape();
+            cast<RankedTensorType>(convOp.filter().getType()).getShape();
         auto outputShape =
-            convOp->getResult(0).getType().cast<RankedTensorType>().getShape();
+            cast<RankedTensorType>(convOp->getResult(0).getType()).getShape();
 
         auto batch = outputShape[0];
         auto height = outputShape[2];
@@ -53,9 +61,9 @@ struct LinalgAnalyzeModel : public LinalgAnalyzeModelBase<LinalgAnalyzeModel> {
       } else if (auto depthOp =
                      dyn_cast<linalg::DepthwiseConv2DNchwChwOp>(op)) {
         auto weightShape =
-            depthOp.filter().getType().cast<RankedTensorType>().getShape();
+            cast<RankedTensorType>(depthOp.filter().getType()).getShape();
         auto outputShape =
-            depthOp->getResult(0).getType().cast<RankedTensorType>().getShape();
+            cast<RankedTensorType>(depthOp->getResult(0).getType()).getShape();
 
         auto batch = outputShape[0];
         auto height = outputShape[2];
@@ -75,9 +83,9 @@ struct LinalgAnalyzeModel : public LinalgAnalyzeModelBase<LinalgAnalyzeModel> {
 
       } else if (auto gemmOp = dyn_cast<linalg::MatmulOp>(op)) {
         auto inputShape =
-            gemmOp.getOperand(0).getType().cast<RankedTensorType>().getShape();
+            cast<RankedTensorType>(gemmOp.getOperand(0).getType()).getShape();
         auto weightShape =
-            gemmOp.getOperand(1).getType().cast<RankedTensorType>().getShape();
+            cast<RankedTensorType>(gemmOp.getOperand(1).getType()).getShape();
 
         auto batch = inputShape[0];
         auto in_filter = weightShape[0];

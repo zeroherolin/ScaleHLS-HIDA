@@ -10,6 +10,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_LOWERDATAFLOW
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -83,7 +91,7 @@ struct LowerTaskToNode : public OpRewritePattern<TaskOp> {
       if (task.getBody().isAncestor(livein.getParentRegion()))
         continue;
 
-      if (livein.getType().isa<MemRefType, StreamType>()) {
+      if (isa<MemRefType, StreamType>(livein.getType())) {
         auto uses = llvm::make_filter_range(livein.getUses(), isInTask);
         if (llvm::any_of(uses, [](OpOperand &use) { return isWritten(use); })) {
           outputs.push_back(livein);
@@ -128,7 +136,7 @@ struct LowerTaskToNode : public OpRewritePattern<TaskOp> {
 } // namespace
 
 namespace {
-struct LowerDataflow : public LowerDataflowBase<LowerDataflow> {
+struct LowerDataflow : public scalehls::impl::LowerDataflowBase<LowerDataflow> {
   LowerDataflow() = default;
   explicit LowerDataflow(bool argSplitExternalAccess) {
     splitExternalAccess = argSplitExternalAccess;

@@ -13,11 +13,20 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <numeric>
+
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_DESIGNSPACEEXPLORE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
 // #include <pthread.h>
 
 #define DEBUG_TYPE "scalehls"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 /// Update paretoPoints to remove design points that are not pareto frontiers.
@@ -317,7 +326,7 @@ void LoopDesignSpace::dumpLoopDesignSpace(StringRef csvFilePath) {
 }
 
 /// Get a random tile config which is one of the closest neighbors of "point".
-Optional<TileConfig>
+std::optional<TileConfig>
 LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
                                           float maxDistance) {
   // Traverse all unestimated tile configs and collect all neighbors.
@@ -330,7 +339,7 @@ LoopDesignSpace::getRandomClosestNeighbor(LoopDesignPoint point,
   }
 
   if (candidateConfigs.empty())
-    return Optional<TileConfig>();
+    return std::optional<TileConfig>();
 
   // Sort candidate configs and collect the closest points.
   llvm::sort(candidateConfigs);
@@ -572,7 +581,7 @@ bool ScaleHLSExplorer::emitQoRDebugInfo(func::FuncOp func,
 static int64_t getInnerParallelism(Block &block) {
   int64_t count = 0;
   for (auto loop : block.getOps<AffineForOp>()) {
-    auto innerCount = getInnerParallelism(loop.getLoopBody().front());
+    auto innerCount = getInnerParallelism(loop.getRegion().front());
     if (auto trip = getAverageTripCount(loop))
       count += trip.value() * innerCount;
     else
@@ -637,7 +646,7 @@ bool ScaleHLSExplorer::simplifyLoopNests(func::FuncOp func) {
       // Calculate the overall introduced parallelism if the innermost loop of
       // the current loop band is fully unrolled.
       auto parallelism =
-          getInnerParallelism(innermostLoop.getLoopBody().front());
+          getInnerParallelism(innermostLoop.getRegion().front());
 
       // Collect all candidate loops into an vector, we'll ignore too large
       // parallelism as unrolling them typically introduce very high cost.
@@ -824,7 +833,7 @@ void ScaleHLSExplorer::applyDesignSpaceExplore(func::FuncOp func,
 }
 
 namespace {
-struct DesignSpaceExplore : public DesignSpaceExploreBase<DesignSpaceExplore> {
+struct DesignSpaceExplore : public scalehls::impl::DesignSpaceExploreBase<DesignSpaceExplore> {
   DesignSpaceExplore() = default;
   DesignSpaceExplore(std::string dseTargetSpec) { targetSpec = dseTargetSpec; }
 

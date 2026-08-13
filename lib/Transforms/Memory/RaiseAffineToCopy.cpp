@@ -9,11 +9,20 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_RAISEAFFINETOCOPY
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 namespace {
-struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
+struct RaiseAffineToCopy : public scalehls::impl::RaiseAffineToCopyBase<RaiseAffineToCopy> {
   void runOnOperation() override {
     auto func = getOperation();
     auto builder = OpBuilder(func);
@@ -41,7 +50,7 @@ struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
 
       // Make sure the all loops in the band have constant trip count.
       llvm::SmallDenseMap<Value, unsigned, 4> shapeMap;
-      if (llvm::any_of(band, [&](mlir::AffineForOp loop) {
+      if (llvm::any_of(band, [&](mlir::affine::AffineForOp loop) {
             auto maybeTripCount = getConstantTripCount(loop);
             if (!maybeTripCount.has_value())
               return true;
@@ -57,9 +66,9 @@ struct RaiseAffineToCopy : public RaiseAffineToCopyBase<RaiseAffineToCopy> {
             AffineExpr expr = std::get<0>(exprAndShape);
             unsigned shape = std::get<1>(exprAndShape);
 
-            if (auto constExpr = expr.dyn_cast<AffineConstantExpr>())
+            if (auto constExpr = dyn_cast<AffineConstantExpr>(expr))
               return constExpr.getValue() != 0 || shape != 1;
-            else if (auto dimExpr = expr.dyn_cast<AffineDimExpr>()) {
+            else if (auto dimExpr = dyn_cast<AffineDimExpr>(expr)) {
               auto index = load.getMapOperands()[dimExpr.getPosition()];
               return shapeMap.lookup(index) != shape;
             } else

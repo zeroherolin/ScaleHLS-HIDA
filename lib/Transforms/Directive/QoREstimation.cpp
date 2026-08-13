@@ -10,8 +10,17 @@
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_QORESTIMATION
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace std;
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -23,7 +32,7 @@ using namespace hls;
 void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
   auto builder = Builder(op);
   auto access = MemRefAccess(op);
-  auto memrefType = access.memref.getType().cast<MemRefType>();
+  auto memrefType = cast<MemRefType>(access.memref.getType());
 
   // If the layout map does not exist, it means the memory is not partitioned.
   auto layoutMap = memrefType.getLayout().getAffineMap();
@@ -45,8 +54,8 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
   for (auto operand : accessMap.getOperands()) {
     if (operandIdx < accessMap.getNumDims()) {
       int64_t step = 1;
-      if (isForInductionVar(operand))
-        step = getForInductionVarOwner(operand).getStep();
+      if (isAffineForInductionVar(operand))
+        step = getForInductionVarOwner(operand).getStepAsInt();
 
       dimReplacements.push_back(step * builder.getAffineDimExpr(operandIdx));
     } else {
@@ -76,7 +85,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
   for (int64_t dim = 0; dim < memrefType.getRank(); ++dim) {
     auto idxExpr = composeMap.getResult(dim);
 
-    if (auto constExpr = idxExpr.dyn_cast<AffineConstantExpr>())
+    if (auto constExpr = dyn_cast<AffineConstantExpr>(idxExpr))
       partitionIndices.push_back(constExpr.getValue());
     else {
       partitionIndices.push_back(-1);
@@ -94,7 +103,7 @@ void ScaleHLSEstimator::getPartitionIndices(Operation *op) {
 void ScaleHLSEstimator::estimateLoadStoreTiming(Operation *op, int64_t begin) {
   auto access = MemRefAccess(op);
   auto memref = access.memref;
-  auto memrefType = memref.getType().cast<MemRefType>();
+  auto memrefType = cast<MemRefType>(memref.getType());
 
   // No port limitation for single-element memories as they are implemented with
   // registers.
@@ -234,7 +243,7 @@ int64_t ScaleHLSEstimator::getResMinII(int64_t begin, int64_t end,
   int64_t II = 1;
   for (auto &pair : map) {
     auto memref = pair.first;
-    auto memrefType = memref.getType().cast<MemRefType>();
+    auto memrefType = cast<MemRefType>(memref.getType());
     auto partitionNum = getPartitionFactors(memrefType);
 
     // FIXME: Study how Vivado HLS handle AXI interfaces.
@@ -308,7 +317,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, func::FuncOp func,
 int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
                                        MemAccessesMap &map) {
   AffineLoopBand band;
-  getLoopIVs(forOp.front(), &band);
+  getAffineForIVs(forOp.front(), &band);
 
   // Find all loop levels whose dependency need to be checked.
   SmallVector<unsigned, 8> loopDepths;
@@ -386,7 +395,7 @@ int64_t ScaleHLSEstimator::getDepMinII(int64_t II, AffineForOp forOp,
                 // disatance. Otherwise, set distance to negative and break.
                 if (ub >= 0)
                   distance +=
-                      accumTrips.back() * max(lb, (int64_t)0) / loop.getStep();
+                      accumTrips.back() * max(lb, (int64_t)0) / loop.getStepAsInt();
                 else {
                   distance = -1;
                   break;
@@ -652,12 +661,12 @@ TimingAttr ScaleHLSEstimator::estimateBlock(Block &block, int64_t begin) {
     // Loop shouldn't overlap with any other scheduled operations. The rationale
     // here is in Vivado HLS, a loop will always be blocked by other operations
     // before it, even if no actual dependency exists between them.
-    if (isa<mlir::AffineForOp>(op))
+    if (isa<mlir::affine::AffineForOp>(op))
       opBegin = max(opBegin, blockEnd);
 
     // Check memory dependencies of the operation and update schedule level.
     for (auto operand : op->getOperands()) {
-      if (operand.getType().isa<MemRefType>())
+      if (isa<MemRefType>(operand.getType()))
         // All users of the same memref value has the possibility to share
         // dependency with the current operation.
         for (auto depOp : operand.getUsers()) {
@@ -825,7 +834,7 @@ ResourceAttr ScaleHLSEstimator::calculateResource(Operation *funcOrLoop) {
         dspNum += resource.getDsp();
 
     } else if (isa<BufferOp>(op)) {
-      auto memrefType = op->getResult(0).getType().cast<MemRefType>();
+      auto memrefType = cast<MemRefType>(op->getResult(0).getType());
       if (memrefType.getNumElements() > 1) {
         auto partitionNum = getPartitionFactors(memrefType);
 
@@ -943,7 +952,7 @@ void scalehls::getDspUsageMap(llvm::json::Object *config,
 }
 
 namespace {
-struct QoREstimation : public scalehls::QoREstimationBase<QoREstimation> {
+struct QoREstimation : public scalehls::impl::QoREstimationBase<QoREstimation> {
   QoREstimation() = default;
   QoREstimation(std::string qorTargetSpec) { targetSpec = qorTargetSpec; }
 

@@ -13,9 +13,18 @@
 #include "scalehls/Transforms/Utils.h"
 #include "llvm/Support/Debug.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_PARALLELIZEDATAFLOWNODE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 #define DEBUG_TYPE "parallelize-dataflow-node"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 /// Apply loop vectorization to the loop band.
@@ -59,7 +68,7 @@ struct GenerateBufferLayout
     auto tileShape = transferOp.getShapedType().getShape();
 
     // If the source has a tile layout, use it as the tile shape.
-    if (auto layout = getTileLayout(transferOp.source())) {
+    if (auto layout = getTileLayout(transferOp.getBase())) {
       // If the layout is already vectorized, check if it's vector shape is
       // compatible with the existing one. If not, it means that different
       // transfer ops are using different vector shapes, which is not allowed.
@@ -73,7 +82,7 @@ struct GenerateBufferLayout
     }
 
     // Set the tile layout the calculated tile shape and vector shape.
-    setTileLayout(transferOp.source(), tileShape, vectorType.getShape());
+    setTileLayout(transferOp.getBase(), tileShape, vectorType.getShape());
     return success();
   }
 };
@@ -81,7 +90,7 @@ struct GenerateBufferLayout
 
 namespace {
 struct ParallelizeDataflowNode
-    : public ParallelizeDataflowNodeBase<ParallelizeDataflowNode> {
+    : public scalehls::impl::ParallelizeDataflowNodeBase<ParallelizeDataflowNode> {
   ParallelizeDataflowNode() = default;
   ParallelizeDataflowNode(unsigned loopUnrollFactor, bool unrollPointLoopOnly,
                           bool argComplexityAware, bool argCorrelationAware) {
@@ -108,10 +117,10 @@ struct ParallelizeDataflowNode
         // FIXME: A hacky method to hand tune the factors and resolve
         // outstanding dataflow nodes.
         if (auto attr = schedule->getAttr("increase"))
-          if (auto annoFactor = attr.dyn_cast<IntegerAttr>())
+          if (auto annoFactor = dyn_cast<IntegerAttr>(attr))
             scheduleUnrollFactor *= annoFactor.getInt();
         if (auto attr = schedule->getAttr("decrease"))
-          if (auto annoFactor = attr.dyn_cast<IntegerAttr>())
+          if (auto annoFactor = dyn_cast<IntegerAttr>(attr))
             scheduleUnrollFactor /= annoFactor.getInt();
       }
 
@@ -157,7 +166,7 @@ struct ParallelizeDataflowNode
     AffineLoopBands bands;
     node.walk([&](AffineForOp loop) {
       if (loop->getParentOfType<NodeOp>() == node &&
-          loop.getOps<mlir::AffineForOp>().empty() &&
+          loop.getOps<mlir::affine::AffineForOp>().empty() &&
           loop.getOps<ScheduleOp>().empty()) {
         AffineLoopBand band;
         getLoopBandFromInnermost(loop, band);

@@ -8,6 +8,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_BALANCEDATAFLOWNODE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -22,7 +30,7 @@ struct InsertCopyNode : public OpRewritePattern<NodeOp> {
       return failure();
 
     for (auto output : node.getOutputs()) {
-      if (output.isa<BlockArgument>() &&
+      if (isa<BlockArgument>(output) &&
           node.getScheduleOp().isDependenceFree())
         continue;
 
@@ -104,7 +112,7 @@ struct InsertCopyNode : public OpRewritePattern<NodeOp> {
 
 namespace {
 struct BalanceDataflowNode
-    : public BalanceDataflowNodeBase<BalanceDataflowNode> {
+    : public scalehls::impl::BalanceDataflowNodeBase<BalanceDataflowNode> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

@@ -7,6 +7,14 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_FUNCPIPELINING
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -28,7 +36,7 @@ static bool applyFuncPipelining(func::FuncOp func, int64_t targetII) {
 }
 
 namespace {
-struct FuncPipelining : public FuncPipeliningBase<FuncPipelining> {
+struct FuncPipelining : public scalehls::impl::FuncPipeliningBase<FuncPipelining> {
   void runOnOperation() override {
     auto func = getOperation();
 

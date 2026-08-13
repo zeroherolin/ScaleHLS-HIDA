@@ -15,6 +15,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 static llvm::cl::opt<bool> emitVitisDirectives("emit-vitis-directives",
@@ -29,7 +30,7 @@ static llvm::cl::opt<int64_t> limitDspNumber("limit-dsp-number",
 //===----------------------------------------------------------------------===//
 
 Type peelAxiType(Type type) {
-  if (auto axiType = type.dyn_cast<AxiType>())
+  if (auto axiType = dyn_cast<AxiType>(type))
     return axiType.getElementType();
   return type;
 }
@@ -38,14 +39,14 @@ static std::string getDataTypeName(Type type) {
   auto valType = peelAxiType(type);
 
   // Handle aggregated types, including memref, vector, and stream.
-  if (auto arrayType = valType.dyn_cast<MemRefType>())
+  if (auto arrayType = dyn_cast<MemRefType>(valType))
     return getDataTypeName(arrayType.getElementType());
-  else if (auto streamType = valType.dyn_cast<StreamType>()) {
+  else if (auto streamType = dyn_cast<StreamType>(valType)) {
     std::string streamName = "hls::stream<";
     streamName += getDataTypeName(streamType.getElementType());
     streamName += ">";
     return streamName;
-  } else if (auto vectorType = valType.dyn_cast<VectorType>()) {
+  } else if (auto vectorType = dyn_cast<VectorType>(valType)) {
     std::string vectorName = "hls::vector<";
     vectorName += getDataTypeName(vectorType.getElementType());
     vectorName += ", " + std::to_string(vectorType.getNumElements()) + ">";
@@ -53,13 +54,13 @@ static std::string getDataTypeName(Type type) {
   }
 
   // Handle scalar types, including float and integer.
-  if (valType.isa<Float32Type>())
+  if (isa<Float32Type>(valType))
     return "float";
-  else if (valType.isa<Float64Type>())
+  else if (isa<Float64Type>(valType))
     return "double";
-  else if (valType.isa<IndexType>())
+  else if (isa<IndexType>(valType))
     return "int";
-  else if (auto intType = valType.dyn_cast<IntegerType>()) {
+  else if (auto intType = dyn_cast<IntegerType>(valType)) {
     if (intType.getWidth() == 1)
       return "bool";
     std::string intName = "ap_";
@@ -225,29 +226,29 @@ SmallString<8> ScaleHLSEmitterBase::addAlias(Value val, Value alias) {
 static SmallString<8> getConstantString(Type type, Attribute attr) {
   SmallString<8> string;
   if (type.isInteger(1)) {
-    auto value = attr.cast<BoolAttr>().getValue();
+    auto value = cast<BoolAttr>(attr).getValue();
     string.append(value ? "true" : "false");
 
   } else if (type.isIndex()) {
     string.append("(int)");
-    auto value = attr.cast<IntegerAttr>().getInt();
+    auto value = cast<IntegerAttr>(attr).getInt();
     string.append(std::to_string(value));
 
-  } else if (auto floatType = type.dyn_cast<FloatType>()) {
+  } else if (auto floatType = dyn_cast<FloatType>(type)) {
     if (floatType.getWidth() == 32) {
       string.append("(float)");
-      auto value = attr.cast<FloatAttr>().getValue().convertToFloat();
+      auto value = cast<FloatAttr>(attr).getValue().convertToFloat();
       string.append(std::isfinite(value)
                         ? std::to_string(value)
                         : (value > 0 ? "INFINITY" : "-INFINITY"));
     } else if (floatType.getWidth() == 64) {
       string.append("(double)");
-      auto value = attr.cast<FloatAttr>().getValue().convertToDouble();
+      auto value = cast<FloatAttr>(attr).getValue().convertToDouble();
       string.append(std::isfinite(value)
                         ? std::to_string(value)
                         : (value > 0 ? "INFINITY" : "-INFINITY"));
     }
-  } else if (auto intType = type.dyn_cast<IntegerType>()) {
+  } else if (auto intType = dyn_cast<IntegerType>(type)) {
     std::string signedness = "";
     if (intType.getSignedness() == IntegerType::SignednessSemantics::Unsigned)
       signedness = "u";
@@ -257,13 +258,13 @@ static SmallString<8> getConstantString(Type type, Attribute attr) {
                   std::to_string(intType.getWidth()) + ">)");
 
     if (intType.isSigned()) {
-      auto value = attr.cast<IntegerAttr>().getValue().getSExtValue();
+      auto value = cast<IntegerAttr>(attr).getValue().getSExtValue();
       string.append(std::to_string(value));
     } else if (intType.isUnsigned()) {
-      auto value = attr.cast<IntegerAttr>().getValue().getZExtValue();
+      auto value = cast<IntegerAttr>(attr).getValue().getZExtValue();
       string.append(std::to_string(value));
     } else {
-      auto value = attr.cast<IntegerAttr>().getInt();
+      auto value = cast<IntegerAttr>(attr).getInt();
       string.append(std::to_string(value));
     }
   }
@@ -274,7 +275,7 @@ SmallString<8> ScaleHLSEmitterBase::getName(Value val) {
   // For constant scalar operations, the constant number will be returned rather
   // than the value name.
   if (auto constOp = val.getDefiningOp<arith::ConstantOp>())
-    if (!constOp.getType().isa<ShapedType>()) {
+    if (!isa<ShapedType>(constOp.getType())) {
       auto string = getConstantString(constOp.getType(), constOp.getValue());
       if (string.empty())
         constOp.emitOpError("constant has invalid value");
@@ -327,7 +328,6 @@ public:
   void emitVectorInit(hls::VectorInitOp op);
   void emitInsert(vector::InsertOp op);
   void emitExtract(vector::ExtractOp op);
-  void emitExtractElement(vector::ExtractElementOp op);
   void emitTransferRead(vector::TransferReadOp op);
   void emitTransferWrite(vector::TransferWriteOp op);
   void emitBroadcast(vector::BroadcastOp);
@@ -417,7 +417,7 @@ public:
   /// Affine expression emitters.
   void emitAffineBinary(AffineBinaryOpExpr expr, const char *syntax) {
     os << "(";
-    if (auto constRHS = expr.getRHS().dyn_cast<AffineConstantExpr>()) {
+    if (auto constRHS = dyn_cast<AffineConstantExpr>(expr.getRHS())) {
       if ((unsigned)*syntax == (unsigned)*"*" && constRHS.getValue() == -1) {
         os << "-";
         visit(expr.getLHS());
@@ -432,8 +432,8 @@ public:
         return;
       }
     }
-    if (auto binaryRHS = expr.getRHS().dyn_cast<AffineBinaryOpExpr>()) {
-      if (auto constRHS = binaryRHS.getRHS().dyn_cast<AffineConstantExpr>()) {
+    if (auto binaryRHS = dyn_cast<AffineBinaryOpExpr>(expr.getRHS())) {
+      if (auto constRHS = dyn_cast<AffineConstantExpr>(binaryRHS.getRHS())) {
         if ((unsigned)*syntax == (unsigned)*"+" && constRHS.getValue() == -1 &&
             binaryRHS.getKind() == AffineExprKind::Mul) {
           visit(expr.getLHS());
@@ -524,9 +524,6 @@ public:
   }
   bool visitOp(vector::InsertOp op) { return emitter.emitInsert(op), true; };
   bool visitOp(vector::ExtractOp op) { return emitter.emitExtract(op), true; };
-  bool visitOp(vector::ExtractElementOp op) {
-    return emitter.emitExtractElement(op), true;
-  };
   bool visitOp(vector::TransferReadOp op) {
     return emitter.emitTransferRead(op), true;
   };
@@ -593,8 +590,8 @@ public:
   bool visitOp(arith::MulFOp op) { return emitter.emitBinary(op, "*"), true; }
   bool visitOp(arith::DivFOp op) { return emitter.emitBinary(op, "/"), true; }
   bool visitOp(arith::RemFOp op) { return emitter.emitBinary(op, "%"), true; }
-  bool visitOp(arith::MaxFOp op) { return emitter.emitMaxMin(op, "max"), true; }
-  bool visitOp(arith::MinFOp op) { return emitter.emitMaxMin(op, "min"), true; }
+  bool visitOp(arith::MaximumFOp op) { return emitter.emitMaxMin(op, "max"), true; }
+  bool visitOp(arith::MinimumFOp op) { return emitter.emitMaxMin(op, "min"), true; }
   bool visitOp(math::PowFOp op) { return emitter.emitMaxMin(op, "pow"), true; }
   bool visitOp(math::Atan2Op op) {
     return emitter.emitMaxMin(op, "atan2"), true;
@@ -737,7 +734,7 @@ void ModuleEmitter::emitStreamWrite(StreamWriteOp op) {
 void ModuleEmitter::emitAxiPort(AxiPortOp op) {
   addAlias(op.getAxi(), op.getElement());
 
-  // if (op.getType().isa<MemRefType, StreamType>()) {
+  // if (isa<MemRefType, StreamType>(op.getType())) {
   indent() << "#pragma HLS interface";
 
   if (op.getBundleType().getKind() == AxiKind::MM) {
@@ -745,7 +742,7 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
       os << " m_axi offset=slave";
     else {
       os << " bram ";
-      auto kind = getMemoryKind(op.getElement().getType().cast<MemRefType>());
+      auto kind = getMemoryKind(cast<MemRefType>(op.getElement().getType()));
       os << getStorageTypeAndImpl(kind, "storage_type", "storage_impl");
     }
   } else if (op.getBundleType().getKind() == AxiKind::STREAM)
@@ -758,7 +755,7 @@ void ModuleEmitter::emitAxiPort(AxiPortOp op) {
   os << " bundle=" << op.getBundleName();
   os << "\n";
 
-  if (op.getElement().getType().isa<MemRefType>())
+  if (isa<MemRefType>(op.getElement().getType()))
     emitArrayDirectives(op.getElement(), true);
   // } else {
   //   indent() << "#pragma HLS interface s_axilite";
@@ -788,7 +785,7 @@ void ModuleEmitter::emitPrimMul(PrimMulOp op) {
       os << " complete dim=0\n";
     }
 
-    auto AIsVector = op.getA().getType().isa<VectorType>();
+    auto AIsVector = isa<VectorType>(op.getA().getType());
     indent() << "pack_mul(";
     emitValue(AIsVector ? op.getA() : op.getB());
     os << ", ";
@@ -870,7 +867,7 @@ void ModuleEmitter::emitCall(func::CallOp op) {
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
-      if (result.getType().isa<MemRefType>())
+      if (isa<MemRefType>(result.getType()))
         emitArrayDecl(result);
       else
         emitValue(result);
@@ -893,7 +890,7 @@ void ModuleEmitter::emitCall(func::CallOp op) {
   // Handle output arguments.
   for (auto result : op.getResults()) {
     // The address should be passed in for scalar result arguments.
-    if (result.getType().isa<ShapedType>())
+    if (isa<ShapedType>(result.getType()))
       os << ", ";
     else
       os << ", &";
@@ -944,7 +941,7 @@ void ModuleEmitter::emitScfIf(scf::IfOp op) {
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
-      if (result.getType().isa<MemRefType>())
+      if (isa<MemRefType>(result.getType()))
         emitArrayDecl(result);
       else
         emitValue(result);
@@ -1057,7 +1054,7 @@ void ModuleEmitter::emitAffineIf(AffineIfOp op) {
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
-      if (result.getType().isa<MemRefType>())
+      if (isa<MemRefType>(result.getType()))
         emitArrayDecl(result);
       else
         emitValue(result);
@@ -1105,7 +1102,7 @@ void ModuleEmitter::emitAffineParallel(AffineParallelOp op) {
   for (auto result : op.getResults()) {
     if (!isDeclared(result)) {
       indent();
-      if (result.getType().isa<MemRefType>())
+      if (isa<MemRefType>(result.getType()))
         emitArrayDecl(result);
       else
         emitValue(result);
@@ -1289,7 +1286,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
         os << " = ";
         emitValue(op.getOperand(resultIdx++), rank);
         break;
-      case (arith::AtomicRMWKind::maxf):
+      case (arith::AtomicRMWKind::maximumf):
       case (arith::AtomicRMWKind::maxs):
       case (arith::AtomicRMWKind::maxu):
         os << " = max(";
@@ -1298,7 +1295,7 @@ void ModuleEmitter::emitAffineYield(AffineYieldOp op) {
         emitValue(op.getOperand(resultIdx++), rank);
         os << ")";
         break;
-      case (arith::AtomicRMWKind::minf):
+      case (arith::AtomicRMWKind::minimumf):
       case (arith::AtomicRMWKind::mins):
       case (arith::AtomicRMWKind::minu):
         os << " = min(";
@@ -1344,7 +1341,7 @@ ModuleEmitter::getTransferIndices(TransferOpType op) {
   // Construct the physical indices.
   for (unsigned i = 0, e = op.getPermutationMap().getNumResults(); i < e; ++i) {
     auto expr = op.getPermutationMap().getResult(i);
-    if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>())
+    if (auto dimExpr = dyn_cast<AffineDimExpr>(expr))
       indices[dimExpr.getPosition()] += " + iv" + std::to_string(i);
   }
   return indices;
@@ -1365,7 +1362,7 @@ getTransferCondition(TransferOpType op,
   SmallString<16> condition;
   for (auto i : outOfBoundDims) {
     auto expr = op.getPermutationMap().getResult(i);
-    if (auto dimExpr = expr.template dyn_cast<AffineDimExpr>()) {
+    if (auto dimExpr = dyn_cast<AffineDimExpr>(expr)) {
       auto pos = dimExpr.getPosition();
       condition += indices[pos];
       condition += " < " + std::to_string(op.getShapedType().getDimSize(pos));
@@ -1388,8 +1385,16 @@ void ModuleEmitter::emitInsert(vector::InsertOp op) {
   addAlias(op.getDest(), op.getResult());
   indent();
   emitValue(op.getDest());
-  os << "[" << op.getPosition()[0].cast<IntegerAttr>().getInt() << "] = ";
-  emitValue(op.getSource());
+  os << "[";
+  {
+    auto position = op.getMixedPosition()[0];
+    if (auto attr = dyn_cast<Attribute>(position))
+      os << cast<IntegerAttr>(attr).getInt();
+    else
+      emitValue(cast<Value>(position));
+  }
+  os << "] = ";
+  emitValue(op.getValueToStore());
   os << ";";
   emitInfoAndNewLine(op);
 }
@@ -1398,18 +1403,13 @@ void ModuleEmitter::emitExtract(vector::ExtractOp op) {
   indent();
   emitValue(op.getResult());
   os << " = ";
-  emitValue(op.getVector());
-  os << "[" << op.getPosition()[0].cast<IntegerAttr>().getInt() << "];";
-  emitInfoAndNewLine(op);
-}
-
-void ModuleEmitter::emitExtractElement(vector::ExtractElementOp op) {
-  indent();
-  emitValue(op.getResult());
-  os << " = ";
-  emitValue(op.getVector());
+  emitValue(op.getSource());
   os << "[";
-  emitValue(op.getPosition());
+  auto position = op.getMixedPosition()[0];
+  if (auto attr = dyn_cast<Attribute>(position))
+    os << cast<IntegerAttr>(attr).getInt();
+  else
+    emitValue(cast<Value>(position));
   os << "];";
   emitInfoAndNewLine(op);
 }
@@ -1427,7 +1427,7 @@ void ModuleEmitter::emitTransferRead(vector::TransferReadOp op) {
   indent();
   emitValue(op.getVector(), rank);
   os << " = ";
-  emitValue(op.getSource());
+  emitValue(op.getBase());
   for (auto index : indices)
     os << "[" << index << "]";
   os << ";";
@@ -1459,7 +1459,7 @@ void ModuleEmitter::emitTransferWrite(vector::TransferWriteOp op) {
   }
 
   indent();
-  emitValue(op.getSource());
+  emitValue(op.getBase());
   for (auto index : indices)
     os << "[" << index << "]";
   os << " = ";
@@ -1480,7 +1480,7 @@ void ModuleEmitter::emitBroadcast(vector::BroadcastOp op) {
   emitValue(op.getSource());
 
   // Figure out whether each dimision is broadcast or multicast.
-  if (auto type = op.getSource().getType().dyn_cast<ShapedType>())
+  if (auto type = dyn_cast<ShapedType>(op.getSource().getType()))
     for (unsigned dim = 0, e = type.getRank(); dim < e; ++dim) {
       if (type.getDimSize(dim) == 1)
         os << "[0]";
@@ -1546,7 +1546,7 @@ void ModuleEmitter::emitMemCpy(memref::CopyOp op) {
   emitValue(op.getSource());
   os << ", ";
 
-  auto type = op.getTarget().getType().cast<MemRefType>();
+  auto type = cast<MemRefType>(op.getTarget().getType());
   os << type.getNumElements() << " * sizeof("
      << getDataTypeName(op.getTarget().getType()) << "));";
   emitInfoAndNewLine(op);
@@ -1557,7 +1557,7 @@ template <typename OpType> void ModuleEmitter::emitReshape(OpType op) {
   auto array = op->getResult(0);
   assert(!isDeclared(array) && "has been declared before.");
 
-  auto arrayType = array.getType().template cast<ShapedType>();
+  auto arrayType = cast<ShapedType>(array.getType());
   indent() << getTypeName(arrayType) << " (*";
 
   // Add the new value to nameTable and emit its name.
@@ -1620,7 +1620,7 @@ void ModuleEmitter::emitMaxMin(OpType op, const char *syntax) {
 void ModuleEmitter::emitSelect(arith::SelectOp op) {
   unsigned rank = emitNestedLoopHeader(op.getResult());
   unsigned conditionRank = rank;
-  if (!op.getCondition().getType().isa<ShapedType>())
+  if (!isa<ShapedType>(op.getCondition().getType()))
     conditionRank = 0;
 
   indent();
@@ -1643,12 +1643,12 @@ template <typename OpType> void ModuleEmitter::emitConstant(OpType op) {
   if (isDeclared(op.getResult()))
     return;
 
-  if (auto denseAttr = op.getValue().template dyn_cast<DenseElementsAttr>()) {
+  if (auto denseAttr = dyn_cast<DenseElementsAttr>(op.getValue())) {
     indent();
     emitArrayDecl(op.getResult());
     os << " = {";
     auto type =
-        op.getResult().getType().template cast<MemRefType>().getElementType();
+        cast<MemRefType>(op.getResult().getType()).getElementType();
 
     unsigned elementIdx = 0;
     for (auto element : denseAttr.template getValues<Attribute>()) {
@@ -1691,7 +1691,7 @@ void ModuleEmitter::emitValue(Value val, unsigned rank, bool isPtr,
 
 void ModuleEmitter::emitArrayDecl(Value array) {
   assert(!isDeclared(array) && "has been declared before.");
-  auto arrayType = peelAxiType(array.getType()).dyn_cast<MemRefType>();
+  auto arrayType = dyn_cast<MemRefType>(peelAxiType(array.getType()));
 
   if (arrayType.hasStaticShape()) {
     emitValue(array);
@@ -1704,7 +1704,7 @@ void ModuleEmitter::emitArrayDecl(Value array) {
 unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
   unsigned rank = 0;
 
-  if (auto type = val.getType().dyn_cast<MemRefType>()) {
+  if (auto type = dyn_cast<MemRefType>(val.getType())) {
     if (!type.hasStaticShape()) {
       emitError(val.getDefiningOp(), "is unranked or has dynamic shape.");
       return 0;
@@ -1717,7 +1717,7 @@ unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
       os << ";\n";
       // TODO: More precise control here. Now we assume vectors are always
       // completely partitioned at all dimensions.
-      if (type.isa<VectorType>()) {
+      if (isa<VectorType>(type)) {
         indent() << "#pragma HLS array_partition variable=";
         emitValue(val);
         os << " complete dim=0\n";
@@ -1734,7 +1734,7 @@ unsigned ModuleEmitter::emitNestedLoopHeader(Value val) {
       addIndent();
       // TODO: More precise control here. Now we assume vectorization loops are
       // always fully unrolled.
-      if (type.isa<VectorType>())
+      if (isa<VectorType>(type))
         indent() << "#pragma HLS unroll\n";
     }
     rank = type.getRank();
@@ -1754,7 +1754,7 @@ void ModuleEmitter::emitNestedLoopFooter(unsigned rank) {
 void ModuleEmitter::emitInfoAndNewLine(Operation *op) {
   os << "\t//";
   // Print line number.
-  if (auto loc = op->getLoc().dyn_cast<FileLineColLoc>())
+  if (auto loc = dyn_cast<FileLineColLoc>(op->getLoc()))
     os << " L" << loc.getLine();
 
   // Print schedule information.
@@ -1801,10 +1801,10 @@ void ModuleEmitter::emitLoopDirectives(Operation *loop) {
 
 void ModuleEmitter::emitArrayDirectives(Value memref, bool isInterface) {
   bool emitPragmaFlag = false;
-  auto type = memref.getType().cast<MemRefType>();
+  auto type = cast<MemRefType>(memref.getType());
 
   // Emit array_partition pragma(s).
-  if (auto attr = type.getLayout().dyn_cast<PartitionLayoutAttr>()) {
+  if (auto attr = dyn_cast<PartitionLayoutAttr>(type.getLayout())) {
     unsigned dim = 0;
     for (auto [kind, factor] :
          llvm::zip(attr.getKinds(), attr.getActualFactors(type.getShape()))) {
@@ -1867,14 +1867,14 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
     indent() << "#pragma HLS interface s_axilite port=return bundle=ctrl\n";
     for (auto &port : portList) {
       // Axi ports are handled separately.
-      if (port.getType().isa<AxiType>())
+      if (isa<AxiType>(port.getType()))
         continue;
 
       // Handle normal memref or stream types.
-      if (port.getType().isa<MemRefType, StreamType>()) {
+      if (isa<MemRefType, StreamType>(port.getType())) {
         indent() << "#pragma HLS interface";
 
-        if (auto memrefPortType = port.getType().dyn_cast<MemRefType>()) {
+        if (auto memrefPortType = dyn_cast<MemRefType>(port.getType())) {
           if (getMemoryKind(memrefPortType) == MemoryKind::DRAM)
             os << " m_axi offset=slave";
           else
@@ -1895,7 +1895,7 @@ void ModuleEmitter::emitFunctionDirectives(func::FuncOp func,
                  << " bundle=ctrl\n";
       }
 
-      if (port.getType().isa<MemRefType>())
+      if (isa<MemRefType>(port.getType()))
         emitArrayDirectives(port, true);
     }
   }
@@ -1950,9 +1950,9 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
     indent();
     auto type = peelAxiType(arg.getType());
 
-    if (type.isa<MemRefType>())
+    if (isa<MemRefType>(type))
       emitArrayDecl(arg);
-    else if (type.isa<StreamType>())
+    else if (isa<StreamType>(type))
       emitValue(arg, /*rank=*/0, /*isPtr=*/false, /*isRef=*/true);
     else
       emitValue(arg);
@@ -1969,7 +1969,7 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
     indent();
     // TODO: a known bug, cannot return a value twice, e.g. return %0, %0 :
     // index, index. However, typically this should not happen.
-    if (result.getType().isa<MemRefType>())
+    if (isa<MemRefType>(result.getType()))
       emitArrayDecl(result);
     else
       // In Vivado HLS, pointer indicates the value is an output.

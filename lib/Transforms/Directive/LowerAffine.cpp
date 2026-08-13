@@ -13,7 +13,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_LOWERAFFINE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -26,9 +35,9 @@ public:
     Location loc = op.getLoc();
     Value lowerBound = lowerAffineLowerBound(op, rewriter);
     Value upperBound = lowerAffineUpperBound(op, rewriter);
-    Value step = rewriter.create<arith::ConstantIndexOp>(loc, op.getStep());
+    Value step = rewriter.create<arith::ConstantIndexOp>(loc, op.getStepAsInt());
     auto scfForOp = rewriter.create<scf::ForOp>(loc, lowerBound, upperBound,
-                                                step, op.getIterOperands());
+                                                step, op.getInits());
 
     // Pass loop directive and info to the generated SCF loop.
     if (auto attr = getLoopDirective(op))
@@ -55,7 +64,7 @@ class LowerAffineSelect : public OpRewritePattern<AffineSelectOp> {
     auto integerSet = op.getIntegerSet();
     Value zeroConstant = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     SmallVector<Value, 8> operands(op.getOperands());
-    auto operandsRef = llvm::makeArrayRef(operands);
+    auto operandsRef = llvm::ArrayRef(operands);
 
     // Calculate cond as a conjunction without short-circuiting.
     Value cond = nullptr;
@@ -86,7 +95,7 @@ class LowerAffineSelect : public OpRewritePattern<AffineSelectOp> {
 };
 
 namespace {
-struct LowerAffine : public LowerAffineBase<LowerAffine> {
+struct LowerAffine : public scalehls::impl::LowerAffineBase<LowerAffine> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();
@@ -98,7 +107,7 @@ struct LowerAffine : public LowerAffineBase<LowerAffine> {
     patterns.add<LowerAffineFor>(context, /*benefit=*/1);
 
     ConversionTarget target(*context);
-    target.addIllegalDialect<mlir::AffineDialect>();
+    target.addIllegalDialect<mlir::affine::AffineDialect>();
     target.addLegalDialect<arith::ArithDialect, memref::MemRefDialect,
                            scf::SCFDialect, vector::VectorDialect>();
     if (failed(applyPartialConversion(func, target, std::move(patterns))))

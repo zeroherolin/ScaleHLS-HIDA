@@ -10,6 +10,14 @@
 include "mlir/Pass/PassBase.td"
 
 def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Optimize HLS design at multiple abstraction level";
   let description = [{
     This pass will automatically conduct the design space exploration (DSE)
@@ -35,11 +43,27 @@ def DesignSpaceExplore : Pass<"scalehls-dse", "ModuleOp"> {
 }
 
 def FuncDuplication : Pass<"scalehls-func-duplication", "mlir::ModuleOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Duplicate function for each function call";
   let constructor = "mlir::scalehls::createFuncDuplicationPass()";
 }
 
 def FuncPreprocess : Pass<"scalehls-func-preprocess", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Preprocess the functions subsequent ScaleHLS optimizations";
   let constructor = "mlir::scalehls::createFuncPreprocessPass()";
 
@@ -60,6 +84,14 @@ def BalanceDataflowNode :
 }
 
 def BufferizeDataflow : Pass<"scalehls-bufferize-dataflow", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Bufferize dataflow operations";
   let constructor = "mlir::scalehls::createBufferizeDataflowPass()";
 }
@@ -94,6 +126,14 @@ def CreateDataflowFromTosa :
 }
 
 def CreateTokenStream : Pass<"scalehls-create-token-stream", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Create token stream channels for DRAM buffers";
   let constructor = "mlir::scalehls::createCreateTokenStreamPass()";
 }
@@ -114,11 +154,27 @@ def EliminateMultiProducer :
 }
 
 def LegalizeDataflow : Pass<"scalehls-legalize-dataflow", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Legalize dataflow by merging dataflow nodes";
   let constructor = "mlir::scalehls::createLegalizeDataflowPass()";
 }
 
 def LowerDataflow : Pass<"scalehls-lower-dataflow", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Lower dataflow from task level to node level";
   let constructor = "mlir::scalehls::createLowerDataflowPass()";
 
@@ -176,6 +232,14 @@ def ScheduleDataflowNode :
 }
 
 def StreamDataflowTask : Pass<"scalehls-stream-dataflow-task", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Stream dataflow tasks";
   let constructor = "mlir::scalehls::createStreamDataflowTaskPass()";
 }
@@ -191,11 +255,27 @@ def ConvertTensorToLinalg :
 }
 
 def LinalgAnalyzeModel : Pass<"scalehls-linalg-analyze-model", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Analyze the operation number of a linalg model";
   let constructor = "mlir::scalehls::createLinalgAnalyzeModelPass()";
 }
 
 def LinalgFakeQuantize : Pass<"scalehls-linalg-fake-quantize", "ModuleOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Convert to quantized model (only for testing use)";
   let constructor = "mlir::scalehls::createLinalgFakeQuantizePass()";
 
@@ -206,11 +286,27 @@ def LinalgFakeQuantize : Pass<"scalehls-linalg-fake-quantize", "ModuleOp"> {
 }
 
 def TosaFakeQuantize : Pass<"scalehls-tosa-fake-quantize", "ModuleOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Convert to 8-bits quantized model (only for testing use)";
   let constructor = "mlir::scalehls::createTosaFakeQuantizePass()";
 }
 
 def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Remove redundant TOSA operations";
   let description = [{
     This simplify-tosa-graph pass will try to remove redundant transpose ops
@@ -224,6 +320,14 @@ def TosaSimplifyGraph : Pass<"scalehls-tosa-simplify-graph", "func::FuncOp"> {
 //===----------------------------------------------------------------------===//
 
 def AffineLoopFusion : Pass<"scalehls-affine-loop-fusion", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Fuse affine loop nests";
   let description = [{
     This pass performs fusion of loop nests using a slicing-based approach. It
@@ -288,6 +392,14 @@ def AffineLoopPerfection :
 }
 
 def AffineLoopTile : Pass<"scalehls-affine-loop-tile", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Tile affine loop nests and annotate point loops";
   let description = [{
     Apply the same "tile-size" to each affine loop in the nests.
@@ -344,6 +456,14 @@ def RemoveVariableBound :
 //===----------------------------------------------------------------------===//
 
 def AffineStoreForward : Pass<"scalehls-affine-store-forward", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Forward store to load, including conditional stores";
   let description = [{
     This pass is similar to scal-repl, but supports to forward stores located in
@@ -353,6 +473,14 @@ def AffineStoreForward : Pass<"scalehls-affine-store-forward", "func::FuncOp"> {
 }
 
 def BufferVectorize : Pass<"scalehls-buffer-vectorize", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Vectorize buffers";
   let description = [{
     This pass convert buffers with scalar element to vector element. Meanwhile,
@@ -368,6 +496,14 @@ def CollapseMemrefUnitDims :
 }
 
 def CreateLocalBuffer : Pass<"scalehls-create-local-buffer", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Promote external buffer to on-chip buffer";
   let constructor = "mlir::scalehls::createCreateLocalBufferPass()";
 
@@ -402,6 +538,14 @@ def CreateMemrefSubview :
 }
 
 def LowerCopyToAffine : Pass<"scalehls-lower-copy-to-affine", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Convert copy and assign to affine loops";
   let constructor = "mlir::scalehls::createLowerCopyToAffinePass()";
 
@@ -412,6 +556,14 @@ def LowerCopyToAffine : Pass<"scalehls-lower-copy-to-affine", "func::FuncOp"> {
 }
 
 def RaiseAffineToCopy : Pass<"scalehls-raise-affine-to-copy", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Raise copy in affine loops to memref.copy";
   let constructor = "mlir::scalehls::createRaiseAffineToCopyPass()";
 }
@@ -427,6 +579,14 @@ def ReduceInitialInterval :
 }
 
 def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Simplify affine if operations";
   let description = [{
     This pass will eliminate all redundant affine if operations which will
@@ -437,6 +597,14 @@ def SimplifyAffineIf : Pass<"scalehls-simplify-affine-if", "func::FuncOp"> {
 }
 
 def SimplifyCopy : Pass<"scalehls-simplify-copy", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Simplify memref copy ops";
   let constructor = "mlir::scalehls::createSimplifyCopyPass()";
 }
@@ -446,6 +614,14 @@ def SimplifyCopy : Pass<"scalehls-simplify-copy", "func::FuncOp"> {
 //===----------------------------------------------------------------------===//
 
 def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Apply optimized array partition strategy";
   let description = [{
     This pass will automatically search for the best array partition solution
@@ -461,6 +637,14 @@ def ArrayPartition : Pass<"scalehls-array-partition", "ModuleOp"> {
 }
 
 def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Create HLS C++ multiplification primitives";
   let description = [{
     This pass will convert 8-bits multiplifications to HLS C++ primitives in
@@ -470,6 +654,14 @@ def CreateHLSPrimitive : Pass<"scalehls-create-hls-primitive", "func::FuncOp"> {
 }
 
 def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Create AXI interfaces for the top function";
   let description = [{
     This pass will create a new "main" function calling the original top
@@ -485,6 +677,14 @@ def CreateAxiInterface : Pass<"scalehls-create-axi-interface", "ModuleOp"> {
 }
 
 def FuncPipelining : Pass<"scalehls-func-pipelining", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Apply function pipelining";
   let description = [{
     This pass will insert pipeline pragma to the specified function, all
@@ -501,6 +701,14 @@ def FuncPipelining : Pass<"scalehls-func-pipelining", "func::FuncOp"> {
 }
 
 def LoopPipelining : Pass<"scalehls-loop-pipelining", "func::FuncOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Apply loop pipelining";
   let description = [{
     This pass will insert pipeline pragma to the target loop level, and
@@ -517,11 +725,27 @@ def LoopPipelining : Pass<"scalehls-loop-pipelining", "func::FuncOp"> {
 }
 
 def LowerAffine : Pass<"scalehls-lower-affine", "func::FuncOp"> {
-  let summary = "Lower AffineSelectOp and AffineForOp";
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
+  let summary = "Lower AffineSelectOp and affine::AffineForOp";
   let constructor = "mlir::scalehls::createLowerAffinePass()";
 }
 
 def QoREstimation : Pass<"scalehls-qor-estimation", "ModuleOp"> {
+  let dependentDialects = [
+    "mlir::scalehls::hls::HLSDialect", "mlir::affine::AffineDialect",
+    "mlir::arith::ArithDialect", "mlir::func::FuncDialect",
+    "mlir::linalg::LinalgDialect", "mlir::memref::MemRefDialect",
+    "mlir::scf::SCFDialect", "mlir::tensor::TensorDialect",
+    "mlir::tosa::TosaDialect", "mlir::vector::VectorDialect",
+    "mlir::bufferization::BufferizationDialect"];
+
   let summary = "Estimate the performance and resource utilization";
   let description = [{
     This pass will analyze the input IR and estimate the latency and resource

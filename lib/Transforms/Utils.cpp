@@ -6,7 +6,7 @@
 
 #include "scalehls/Transforms/Utils.h"
 #include "mlir/Dialect/Affine/LoopUtils.h"
-#include "mlir/Dialect/Affine/Passes.h"
+#include "mlir/Dialect/Affine/Transforms/Passes.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tosa/IR/TosaOps.h"
 #include "mlir/IR/Dominance.h"
@@ -20,8 +20,8 @@ using namespace hls;
 
 static void addMemoryOptsPipeline(PassManager &pm) {
   // To factor out the redundant affine operations.
-  pm.addPass(createAffineLoopNormalizePass());
-  pm.addPass(createSimplifyAffineStructuresPass());
+  pm.addPass(affine::createAffineLoopNormalizePass());
+  pm.addPass(affine::createSimplifyAffineStructuresPass());
   pm.addPass(createCanonicalizerPass());
 
   // To simplify the memory accessing. Note that the store forwarding is

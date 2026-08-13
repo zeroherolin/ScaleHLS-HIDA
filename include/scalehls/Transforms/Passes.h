@@ -114,7 +114,7 @@ std::unique_ptr<Pass> createLoopPipeliningPass();
 std::unique_ptr<Pass> createLowerAffinePass();
 std::unique_ptr<Pass> createQoREstimationPass(std::string qorTargetSpec = "");
 
-#define GEN_PASS_CLASSES
+#define GEN_PASS_DECL
 #include "scalehls/Transforms/Passes.h.inc"
 
 } // namespace scalehls

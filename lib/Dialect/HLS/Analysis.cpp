@@ -11,6 +11,7 @@
 #define DEBUG_TYPE "dataflow-analysis"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -27,27 +28,27 @@ ComplexityAnalysis::ComplexityAnalysis(func::FuncOp func) {
 }
 
 /// A helper to get the complexity of a schedule.
-Optional<unsigned long>
+std::optional<unsigned long>
 ComplexityAnalysis::getScheduleComplexity(ScheduleOp schedule) const {
   unsigned long scheduleComplexity = 0;
   for (auto node : schedule.getOps<NodeOp>()) {
     if (!nodeComplexityMap.count(node))
-      return Optional<unsigned long>();
+      return std::optional<unsigned long>();
     scheduleComplexity =
         std::max(scheduleComplexity, nodeComplexityMap.lookup(node));
   }
   return scheduleComplexity;
 }
 
-Optional<unsigned long>
+std::optional<unsigned long>
 ComplexityAnalysis::getNodeComplexity(NodeOp node) const {
   if (nodeComplexityMap.count(node))
     return nodeComplexityMap.lookup(node);
-  return Optional<unsigned long>();
+  return std::optional<unsigned long>();
 }
 
 /// A helper to get the complexity of the given block
-Optional<unsigned long>
+std::optional<unsigned long>
 ComplexityAnalysis::calculateBlockComplexity(Block *block) const {
   unsigned long complexity = 0;
   for (auto &op : block->getOperations()) {
@@ -56,27 +57,27 @@ ComplexityAnalysis::calculateBlockComplexity(Block *block) const {
     if (auto schedule = dyn_cast<ScheduleOp>(op)) {
       auto scheduleComplexity = getScheduleComplexity(schedule);
       if (!scheduleComplexity.has_value())
-        return Optional<unsigned long>();
+        return std::optional<unsigned long>();
       complexity += scheduleComplexity.value();
 
-    } else if (auto loop = dyn_cast<mlir::AffineForOp>(op)) {
+    } else if (auto loop = dyn_cast<mlir::affine::AffineForOp>(op)) {
       auto loopComplexity = calculateBlockComplexity(loop.getBody());
       auto loopTripCount = getAverageTripCount(loop);
       if (!loopComplexity.has_value() || !loopTripCount.has_value())
-        return Optional<unsigned long>();
+        return std::optional<unsigned long>();
       complexity += loopTripCount.value() *
                     std::max((unsigned long)1, loopComplexity.value());
 
-    } else if (auto ifOp = dyn_cast<mlir::AffineIfOp>(op)) {
+    } else if (auto ifOp = dyn_cast<mlir::affine::AffineIfOp>(op)) {
       auto thenComplexity = calculateBlockComplexity(ifOp.getThenBlock());
       if (!thenComplexity.has_value())
-        return Optional<unsigned long>();
+        return std::optional<unsigned long>();
       auto ifComplexity = thenComplexity.value();
 
       if (ifOp.hasElse()) {
         auto elseComplexity = calculateBlockComplexity(ifOp.getElseBlock());
         if (!elseComplexity.has_value())
-          return Optional<unsigned long>();
+          return std::optional<unsigned long>();
         ifComplexity = std::max(ifComplexity, elseComplexity.value());
       }
       complexity += ifComplexity;
@@ -105,11 +106,11 @@ getBufferIndexDepthsAndStrides(NodeOp node, Value buffer) {
     Value memref;
     auto map = AffineMap::get(buffer.getContext());
     SmallVector<Value> operands;
-    if (auto read = dyn_cast<mlir::AffineReadOpInterface>(op)) {
+    if (auto read = dyn_cast<mlir::affine::AffineReadOpInterface>(op)) {
       memref = read.getMemRef();
       map = read.getAffineMap();
       operands = read.getMapOperands();
-    } else if (auto write = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
+    } else if (auto write = dyn_cast<mlir::affine::AffineWriteOpInterface>(op)) {
       memref = write.getMemRef();
       map = write.getAffineMap();
       operands = write.getMapOperands();

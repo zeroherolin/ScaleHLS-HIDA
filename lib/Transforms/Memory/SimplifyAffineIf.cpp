@@ -9,14 +9,23 @@
 #include "scalehls/Dialect/HLS/Utils.h"
 #include "scalehls/Transforms/Passes.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_SIMPLIFYAFFINEIF
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 namespace {
-struct RemoveRedundantIf : public OpRewritePattern<mlir::AffineIfOp> {
-  using OpRewritePattern<mlir::AffineIfOp>::OpRewritePattern;
+struct RemoveRedundantIf : public OpRewritePattern<mlir::affine::AffineIfOp> {
+  using OpRewritePattern<mlir::affine::AffineIfOp>::OpRewritePattern;
 
-  LogicalResult matchAndRewrite(mlir::AffineIfOp ifOp,
+  LogicalResult matchAndRewrite(mlir::affine::AffineIfOp ifOp,
                                 PatternRewriter &rewriter) const override {
     auto result = ifAlwaysTrueOrFalse(ifOp);
 
@@ -126,7 +135,7 @@ static bool applySimplifyAffineIf(func::FuncOp func) {
 }
 
 namespace {
-struct SimplifyAffineIf : public SimplifyAffineIfBase<SimplifyAffineIf> {
+struct SimplifyAffineIf : public scalehls::impl::SimplifyAffineIfBase<SimplifyAffineIf> {
   void runOnOperation() override { applySimplifyAffineIf(getOperation()); }
 };
 } // namespace

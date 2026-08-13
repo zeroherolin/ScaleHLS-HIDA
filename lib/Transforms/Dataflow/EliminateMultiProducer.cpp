@@ -10,7 +10,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_ELIMINATEMULTIPRODUCER
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -81,13 +90,13 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
         auto readUses = llvm::make_filter_range(
             newBufferArg.getUses(), [](OpOperand &use) { return isRead(use); });
         if (llvm::hasSingleElement(readUses))
-          if (auto read = dyn_cast<mlir::AffineReadOpInterface>(
+          if (auto read = dyn_cast<mlir::affine::AffineReadOpInterface>(
                   readUses.begin()->getOwner())) {
             // We need to make sure all the indices of the affine load are known
             // loop induction variables and meanwhile the load has identity
             // memory access map.
             AffineLoopBand band;
-            getLoopIVs(*read, &band);
+            getAffineForIVs(*read, &band);
 
             llvm::SmallDenseSet<Value> depInductionVars;
             for (auto loop : band)
@@ -130,7 +139,7 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
               }
 
               rewriter.setInsertionPoint(read);
-              auto value = rewriter.create<mlir::AffineLoadOp>(
+              auto value = rewriter.create<mlir::affine::AffineLoadOp>(
                   read.getLoc(), bufferArg, read.getMapOperands());
 
               if (!ifExprs.empty()) {
@@ -140,7 +149,7 @@ struct BufferMultiProducer : public OpRewritePattern<ScheduleOp> {
                 rewriter.setInsertionPointToStart(ifOp.getThenBlock());
               }
 
-              rewriter.create<mlir::AffineStoreOp>(
+              rewriter.create<mlir::affine::AffineStoreOp>(
                   read.getLoc(), value, newBufferArg, read.getMapOperands());
               continue;
             }
@@ -197,7 +206,7 @@ struct MergeMultiProducer : public OpRewritePattern<ScheduleOp> {
 
 namespace {
 struct EliminateMultiProducer
-    : public EliminateMultiProducerBase<EliminateMultiProducer> {
+    : public scalehls::impl::EliminateMultiProducerBase<EliminateMultiProducer> {
   void runOnOperation() override {
     auto func = getOperation();
     auto context = func.getContext();

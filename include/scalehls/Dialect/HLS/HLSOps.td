@@ -25,20 +25,20 @@ class HLSOp<string mnemonic, list<Trait> traits = []> :
 def DataflowBufferLike : NativeOpTrait<"DataflowBufferLike">;
 
 class StreamOf<list<Type> allowedTypes> : Type<And<[
-    CPred<"$_self.isa<mlir::scalehls::hls::StreamType>()">,
+    CPred<"isa<mlir::scalehls::hls::StreamType>($_self)">,
     Concat<"[](mlir::Type elementType) { return ",
       SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
-      "; }($_self.cast<mlir::scalehls::hls::StreamType>().getElementType())">
+      "; }(cast<mlir::scalehls::hls::StreamType>($_self).getElementType())">
   ]>,
   "stream of " # AnyTypeOf<allowedTypes>.summary # " values",
   "mlir::scalehls::hls::StreamType"
 >;
 
 class AxiOf<list<Type> allowedTypes> : Type<And<[
-    CPred<"$_self.isa<mlir::scalehls::hls::AxiType>()">,
+    CPred<"isa<mlir::scalehls::hls::AxiType>($_self)">,
     Concat<"[](mlir::Type elementType) { return ",
       SubstLeaves<"$_self", "elementType", AnyTypeOf<allowedTypes>.predicate>,
-      "; }($_self.cast<mlir::scalehls::hls::AxiType>().getElementType())">
+      "; }(cast<mlir::scalehls::hls::AxiType>($_self).getElementType())">
   ]>,
   "axi of " # AnyTypeOf<allowedTypes>.summary # " values",
   "mlir::scalehls::hls::AxiType"
@@ -56,7 +56,7 @@ def AnyAxi : AxiOf<[AnyType]>;
 
 def DispatchOp : HLSOp<"dataflow.dispatch", [RecursiveMemoryEffects,
       SingleBlockImplicitTerminator<"YieldOp">,
-      ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
+      ParentOneOf<["func::FuncOp", "affine::AffineForOp"]>]> {
   let summary = "Represent a dataflow dispatch";
   let description = [{
     Dispatch op has a transparent region that contains a list of task ops to be
@@ -114,7 +114,7 @@ def YieldOp : HLSOp<"dataflow.yield", [NoMemoryEffect, ReturnLike, Terminator,
   let arguments = (ins Variadic<AnyType>:$results);
   let assemblyFormat = "$results attr-dict `:` type($results)";
 
-  let builders = [OpBuilder<(ins), "build($_builder, $_state, llvm::None);">];
+  let builders = [OpBuilder<(ins), "build($_builder, $_state, ::mlir::ValueRange());">];
 }
 
 def ToStreamOp : HLSOp<"dataflow.to_stream", [NoMemoryEffect]> {
@@ -146,7 +146,7 @@ def ToValueOp : HLSOp<"dataflow.to_value", [NoMemoryEffect]> {
 def ScheduleOp : HLSOp<"dataflow.schedule", [
       DeclareOpInterfaceMethods<MemoryEffectsOpInterface>, IsolatedFromAbove,
       AffineScope, SingleBlock, NoTerminator,
-      ParentOneOf<["func::FuncOp", "AffineForOp"]>]> {
+      ParentOneOf<["func::FuncOp", "affine::AffineForOp"]>]> {
   let summary = "Represent a dataflow schedule";
   let description = [{
     Schedule op has an isolated region to contain a list of dataflow node ops to
@@ -344,7 +344,7 @@ def BufferVectorizeOp : HLSOp<"buffer_vectorize", [ViewLikeOpInterface,
   let summary = "Vectorize a buffer from scalar element to vector element";
 
   let arguments = (ins AnyBuffer:$input);
-  let results = (outs StaticShapeMemRefOf<[AnyVector]>:$output);
+  let results = (outs StaticShapeMemRefOf<[AnyVectorOfNonZeroRank]>:$output);
   let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
 
   let hasFolder = 1;
@@ -352,10 +352,10 @@ def BufferVectorizeOp : HLSOp<"buffer_vectorize", [ViewLikeOpInterface,
   let extraClassDeclaration = [{
     Value getViewSource() { return getInput(); }
     MemRefType getInputType() {
-      return getInput().getType().cast<MemRefType>();
+      return cast<MemRefType>(getInput().getType());
     }
     VectorType getOutputVectorType() {
-      return getType().getElementType().cast<VectorType>();
+      return cast<VectorType>(getType().getElementType());
     }
   }];
 }
@@ -364,7 +364,7 @@ def BufferDevectorizeOp : HLSOp<"buffer_devectorize", [ViewLikeOpInterface,
       NoMemoryEffect]> {
   let summary = "Devectorize a buffer from vector element to scalar element";
 
-  let arguments = (ins StaticShapeMemRefOf<[AnyVector]>:$input);
+  let arguments = (ins StaticShapeMemRefOf<[AnyVectorOfNonZeroRank]>:$input);
   let results = (outs AnyBuffer:$output);
   let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
 
@@ -372,10 +372,10 @@ def BufferDevectorizeOp : HLSOp<"buffer_devectorize", [ViewLikeOpInterface,
   let extraClassDeclaration = [{
     Value getViewSource() { return getInput(); }
     MemRefType getInputType() {
-      return getInput().getType().cast<MemRefType>();
+      return cast<MemRefType>(getInput().getType());
     }
     VectorType getInputVectorType() {
-      return getInputType().getElementType().cast<VectorType>();
+      return cast<VectorType>(getInputType().getElementType());
     }
   }];
 }
@@ -402,10 +402,10 @@ def AxiPortOp : HLSOp<"axi.port", [NoMemoryEffect, HasParent<"func::FuncOp">]> {
   let hasVerifier = 1;
   let extraClassDeclaration = [{
     AxiType getAxiType() {
-      return getAxi().getType().cast<AxiType>();
+      return cast<AxiType>(getAxi().getType());
     }
     BundleType getBundleType() {
-      return getBundle().getType().cast<BundleType>();
+      return cast<BundleType>(getBundle().getType());
     }
     StringRef getBundleName() {
       return getBundle().getDefiningOp<AxiBundleOp>().getName();
@@ -423,7 +423,7 @@ def AxiPackOp : HLSOp<"axi.pack", [NoMemoryEffect, HasParent<"func::FuncOp">]> {
   let hasVerifier = 1;
   let extraClassDeclaration = [{
     AxiType getAxiType() {
-      return getAxi().getType().cast<AxiType>();
+      return cast<AxiType>(getAxi().getType());
     }
   }];
 }
@@ -512,7 +512,7 @@ def AffineSelectOp : HLSOp<"affine.select", [NoMemoryEffect]> {
 def VectorInitOp : HLSOp<"vector.init", [NoMemoryEffect]> {
   let summary = "Initialize a vector";
 
-  let results = (outs AnyVector:$output);
+  let results = (outs AnyVectorOfNonZeroRank:$output);
   let assemblyFormat = "attr-dict `:` type($output)";
 }
 

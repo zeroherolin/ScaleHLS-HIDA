@@ -8,13 +8,22 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CREATEMEMREFSUBVIEW
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
 namespace {
 struct CreateMemrefSubview
-    : public scalehls::CreateMemrefSubviewBase<CreateMemrefSubview> {
+    : public scalehls::impl::CreateMemrefSubviewBase<CreateMemrefSubview> {
   CreateMemrefSubview() = default;
   CreateMemrefSubview(CreateSubviewMode argCreateSubviewMode) {
     createSubviewMode = argCreateSubviewMode;
@@ -36,11 +45,11 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band,
     SmallVector<Value, 4> operands;
     AffineMap map;
     Value memref;
-    if (auto loadOp = dyn_cast<mlir::AffineReadOpInterface>(op)) {
+    if (auto loadOp = dyn_cast<mlir::affine::AffineReadOpInterface>(op)) {
       operands = SmallVector<Value, 4>(loadOp.getMapOperands());
       map = loadOp.getAffineMap();
       memref = loadOp.getMemRef();
-    } else if (auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(op)) {
+    } else if (auto storeOp = dyn_cast<mlir::affine::AffineWriteOpInterface>(op)) {
       operands = SmallVector<Value, 4>(storeOp.getMapOperands());
       map = storeOp.getAffineMap();
       memref = storeOp.getMemRef();
@@ -120,12 +129,12 @@ static void createSubviewBeforeLoopBand(AffineLoopBand band,
         bool hasPointLoopVar = false;
         bool hasDynamicVar = false;
         localExpr.walk([&](AffineExpr id) {
-          if (auto dim = id.dyn_cast<AffineDimExpr>()) {
+          if (auto dim = dyn_cast<AffineDimExpr>(id)) {
             if (pointDims.count(dim.getPosition()))
               hasPointLoopVar = true;
             else
               hasDynamicVar = true;
-          } else if (id.isa<AffineSymbolExpr>())
+          } else if (isa<AffineSymbolExpr>(id))
             hasDynamicVar = true;
         });
 

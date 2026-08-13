@@ -36,12 +36,12 @@ public:
             scf::ReduceReturnOp, scf::YieldOp,
 
             // Affine statements.
-            AffineForOp, AffineIfOp, AffineParallelOp, AffineApplyOp,
-            AffineMaxOp, AffineMinOp, AffineLoadOp, AffineStoreOp,
-            AffineVectorLoadOp, AffineVectorStoreOp, AffineYieldOp,
+            affine::AffineForOp, affine::AffineIfOp, affine::AffineParallelOp, affine::AffineApplyOp,
+            affine::AffineMaxOp, affine::AffineMinOp, affine::AffineLoadOp, affine::AffineStoreOp,
+            affine::AffineVectorLoadOp, affine::AffineVectorStoreOp, affine::AffineYieldOp,
 
             // Vector statements.
-            vector::InsertOp, vector::ExtractOp, vector::ExtractElementOp,
+            vector::InsertOp, vector::ExtractOp,
             vector::TransferReadOp, vector::TransferWriteOp,
             vector::BroadcastOp,
 
@@ -57,7 +57,7 @@ public:
 
             // Float binary expressions.
             arith::CmpFOp, arith::AddFOp, arith::SubFOp, arith::MulFOp,
-            arith::DivFOp, arith::RemFOp, arith::MaxFOp, arith::MinFOp,
+            arith::DivFOp, arith::RemFOp, arith::MaximumFOp, arith::MinimumFOp,
             math::PowFOp, math::Atan2Op,
 
             // Integer binary expressions.
@@ -124,22 +124,21 @@ public:
   HANDLE(scf::YieldOp);
 
   // Affine statements.
-  HANDLE(AffineForOp);
-  HANDLE(AffineIfOp);
-  HANDLE(AffineParallelOp);
-  HANDLE(AffineApplyOp);
-  HANDLE(AffineMaxOp);
-  HANDLE(AffineMinOp);
-  HANDLE(AffineLoadOp);
-  HANDLE(AffineStoreOp);
-  HANDLE(AffineVectorLoadOp);
-  HANDLE(AffineVectorStoreOp);
-  HANDLE(AffineYieldOp);
+  HANDLE(affine::AffineForOp);
+  HANDLE(affine::AffineIfOp);
+  HANDLE(affine::AffineParallelOp);
+  HANDLE(affine::AffineApplyOp);
+  HANDLE(affine::AffineMaxOp);
+  HANDLE(affine::AffineMinOp);
+  HANDLE(affine::AffineLoadOp);
+  HANDLE(affine::AffineStoreOp);
+  HANDLE(affine::AffineVectorLoadOp);
+  HANDLE(affine::AffineVectorStoreOp);
+  HANDLE(affine::AffineYieldOp);
 
   // Vector statements.
   HANDLE(vector::InsertOp);
   HANDLE(vector::ExtractOp);
-  HANDLE(vector::ExtractElementOp);
   HANDLE(vector::TransferReadOp);
   HANDLE(vector::TransferWriteOp);
   HANDLE(vector::BroadcastOp);
@@ -175,8 +174,8 @@ public:
   HANDLE(arith::MulFOp);
   HANDLE(arith::DivFOp);
   HANDLE(arith::RemFOp);
-  HANDLE(arith::MaxFOp);
-  HANDLE(arith::MinFOp);
+  HANDLE(arith::MaximumFOp);
+  HANDLE(arith::MinimumFOp);
   HANDLE(math::PowFOp);
   HANDLE(math::Atan2Op);
 

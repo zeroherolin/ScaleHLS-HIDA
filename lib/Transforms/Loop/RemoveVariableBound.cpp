@@ -9,7 +9,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_REMOVEVARIABLEBOUND
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 /// Apply remove variable bound to all inner loops of the input loop.
@@ -94,7 +103,7 @@ bool scalehls::applyRemoveVariableBound(AffineLoopBand &band) {
 
 namespace {
 struct RemoveVariableBound
-    : public RemoveVariableBoundBase<RemoveVariableBound> {
+    : public scalehls::impl::RemoveVariableBoundBase<RemoveVariableBound> {
   void runOnOperation() override {
     // Collect all target loop bands.
     AffineLoopBands targetBands;

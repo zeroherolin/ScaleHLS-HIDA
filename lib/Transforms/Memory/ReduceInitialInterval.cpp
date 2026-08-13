@@ -11,9 +11,18 @@
 #include "scalehls/Transforms/Passes.h"
 #include "llvm/Support/Debug.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_REDUCEINITIALINTERVAL
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 #define DEBUG_TYPE "scalehls-reduce-initial-interval"
 
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 /// Find a chain of commutative operators starting from "headOps" and ended with
@@ -172,13 +181,14 @@ struct ReduceInitialIntervalPattern : public OpRewritePattern<AffineForOp> {
 
 namespace {
 struct ReduceInitialInterval
-    : public ReduceInitialIntervalBase<ReduceInitialInterval> {
+    : public scalehls::impl::ReduceInitialIntervalBase<ReduceInitialInterval> {
   void runOnOperation() override {
     auto func = getOperation();
     mlir::RewritePatternSet patterns(func.getContext());
     patterns.add<ReduceInitialIntervalPattern>(func.getContext());
-    (void)applyPatternsAndFoldGreedily(func, std::move(patterns),
-                                       {false, true, 1});
+    (void)applyPatternsGreedily(
+        func, std::move(patterns),
+        GreedyRewriteConfig().setUseTopDownTraversal(false).setMaxIterations(1));
   }
 };
 } // namespace

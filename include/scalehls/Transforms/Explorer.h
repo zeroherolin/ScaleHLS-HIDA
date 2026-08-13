@@ -60,7 +60,7 @@ public:
   void dumpLoopDesignSpace(StringRef csvFilePath);
 
   /// Get a random tile config which is one of the closest neighbors of "point".
-  Optional<TileConfig> getRandomClosestNeighbor(LoopDesignPoint point,
+  std::optional<TileConfig> getRandomClosestNeighbor(LoopDesignPoint point,
                                                 float maxDistance);
 
   void exploreLoopDesignSpace(unsigned maxIterNum, float maxDistance);
@@ -151,7 +151,7 @@ public:
   ScaleHLSEstimator &estimator;
   unsigned maxDspNum;
 
-  SmallVector<AffineForOp, 4> targetLoops;
+  SmallVector<affine::AffineForOp, 4> targetLoops;
 };
 
 //===----------------------------------------------------------------------===//

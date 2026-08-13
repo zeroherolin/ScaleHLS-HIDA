@@ -12,7 +12,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include <algorithm>
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_AFFINESTOREFORWARD
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 
 /// A helper to check whether an ifOp is valid to be replaced with select.
@@ -28,18 +37,18 @@ bool isValid(AffineIfOp ifOp, Operation *targetOp) {
 /// other operations will overwrite the memory loaded between the given load
 /// and store.  If such a value exists, the replaced `loadOp` will be added to
 /// `loadOpsToErase` and its memref will be added to `memrefsToErase`.
-static mlir::AffineReadOpInterface
-forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
+static mlir::affine::AffineReadOpInterface
+forwardStoreToLoad(mlir::affine::AffineReadOpInterface loadOp,
                    SmallVectorImpl<Operation *> &loadOpsToErase,
                    SmallPtrSetImpl<Value> &memrefsToErase,
                    DominanceInfo &domInfo) {
 
   // The store op candidate for forwarding that satisfies all conditions
   // to replace the load, if any.
-  mlir::AffineWriteOpInterface lastWriteStoreOp = nullptr;
+  mlir::affine::AffineWriteOpInterface lastWriteStoreOp = nullptr;
 
   for (auto *user : loadOp.getMemRef().getUsers()) {
-    auto storeOp = dyn_cast<mlir::AffineWriteOpInterface>(user);
+    auto storeOp = dyn_cast<mlir::affine::AffineWriteOpInterface>(user);
     if (!storeOp)
       continue;
     MemRefAccess srcAccess(storeOp);
@@ -61,7 +70,7 @@ forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
     // as start for intervening effect searching.
     Operation *startOp = storeOp;
     if (startOp->getParentRegion() != loadOp->getParentRegion()) {
-      if (auto ifOp = dyn_cast<mlir::AffineIfOp>(storeOp->getParentOp()))
+      if (auto ifOp = dyn_cast<mlir::affine::AffineIfOp>(storeOp->getParentOp()))
         if (isValid(ifOp, loadOp) && !ifAlwaysTrueOrFalse(ifOp).second)
           startOp = ifOp;
     }
@@ -94,13 +103,13 @@ forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
 
   if (!domInfo.dominates(lastWriteStoreOp, loadOp)) {
     // Special case when the store is inside of an if statement.
-    auto ifOp = lastWriteStoreOp->getParentOfType<mlir::AffineIfOp>();
+    auto ifOp = lastWriteStoreOp->getParentOfType<mlir::affine::AffineIfOp>();
     lastWriteStoreOp->moveBefore(ifOp);
 
     // Create a load and select op as the new value to write.
     auto builder = OpBuilder(ifOp);
     builder.setInsertionPoint(lastWriteStoreOp);
-    auto newLoad = cast<mlir::AffineReadOpInterface>(builder.clone(*loadOp));
+    auto newLoad = cast<mlir::affine::AffineReadOpInterface>(builder.clone(*loadOp));
     auto select = builder.create<hls::AffineSelectOp>(
         ifOp.getLoc(), ifOp.getIntegerSet(), ifOp.getOperands(), storeVal,
         newLoad.getValue());
@@ -122,7 +131,7 @@ forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
   memrefsToErase.insert(loadOp.getMemRef());
   // Record this to erase later.
   loadOpsToErase.push_back(loadOp);
-  return mlir::AffineReadOpInterface();
+  return mlir::affine::AffineReadOpInterface();
 }
 
 // This attempts to find stores which have no impact on the final result.
@@ -130,14 +139,14 @@ forwardStoreToLoad(mlir::AffineReadOpInterface loadOp,
 // 1) writeA and writeB have mathematically equivalent affine access functions.
 // 2) writeB postdominates writeA.
 // 3) There is no potential read between writeA and writeB.
-static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
+static void findUnusedStore(mlir::affine::AffineWriteOpInterface writeA,
                             SmallVectorImpl<Operation *> &opsToErase,
                             SmallPtrSetImpl<Value> &memrefsToErase,
                             PostDominanceInfo &postDominanceInfo) {
   auto memref = writeA.getMemRef();
   for (Operation *user : writeA.getMemRef().getUsers()) {
     // Only consider writing operations.
-    auto writeB = dyn_cast<mlir::AffineWriteOpInterface>(user);
+    auto writeB = dyn_cast<mlir::affine::AffineWriteOpInterface>(user);
     if (!writeB)
       continue;
 
@@ -158,14 +167,14 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
     Operation *targetA = writeA;
     Operation *targetB = writeB;
     if (targetA->getParentRegion() != targetB->getParentRegion()) {
-      if (auto ifOpA = dyn_cast<mlir::AffineIfOp>(writeA->getParentOp())) {
+      if (auto ifOpA = dyn_cast<mlir::affine::AffineIfOp>(writeA->getParentOp())) {
         if (isValid(ifOpA, writeB))
           targetA = ifOpA;
-        if (auto ifOpB = dyn_cast<mlir::AffineIfOp>(writeB->getParentOp()))
+        if (auto ifOpB = dyn_cast<mlir::affine::AffineIfOp>(writeB->getParentOp()))
           if (checkSameIfStatement(ifOpA, ifOpB))
             targetB = ifOpB;
       } else if (auto ifOpB =
-                     dyn_cast<mlir::AffineIfOp>(writeB->getParentOp())) {
+                     dyn_cast<mlir::affine::AffineIfOp>(writeB->getParentOp())) {
         if (isValid(ifOpB, writeA))
           targetB = ifOpB;
       }
@@ -202,7 +211,7 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
   }
 
   if (llvm::all_of(memref.getUsers(), [&](Operation *ownerOp) {
-        return isa<mlir::AffineWriteOpInterface>(ownerOp) ||
+        return isa<mlir::affine::AffineWriteOpInterface>(ownerOp) ||
                hasSingleEffect<MemoryEffects::Free>(ownerOp, memref);
       }))
     memrefsToErase.insert(memref);
@@ -214,7 +223,7 @@ static void findUnusedStore(mlir::AffineWriteOpInterface writeA,
 // 1) loadA and loadB have mathematically equivalent affine access functions.
 // 2) loadB dominates loadA.
 // 3) There is no write between loadA and loadB.
-static void loadCSE(mlir::AffineReadOpInterface loadA,
+static void loadCSE(mlir::affine::AffineReadOpInterface loadA,
                     SmallVectorImpl<Operation *> &loadOpsToErase,
                     DominanceInfo &domInfo) {
   // FIXME: This is not safe!!! After task is created from affine, we should not
@@ -222,7 +231,7 @@ static void loadCSE(mlir::AffineReadOpInterface loadA,
   // if (auto buffer = loadA.getMemRef().getDefiningOp<BufferOp>())
   //   if (auto initValue = buffer.getInitValue())
   //     if (llvm::all_of(buffer->getUsers(), [&](Operation *user) {
-  //           if (auto store = dyn_cast<mlir::AffineWriteOpInterface>(user)) {
+  //           if (auto store = dyn_cast<mlir::affine::AffineWriteOpInterface>(user)) {
   //             if (crossRegionDominates(store, loadA))
   //               return false;
   //             if (checkDependence(store, loadA))
@@ -240,9 +249,9 @@ static void loadCSE(mlir::AffineReadOpInterface loadA,
   //       return;
   //     }
 
-  SmallVector<mlir::AffineReadOpInterface, 4> loadCandidates;
+  SmallVector<mlir::affine::AffineReadOpInterface, 4> loadCandidates;
   for (auto *user : loadA.getMemRef().getUsers()) {
-    auto loadB = dyn_cast<mlir::AffineReadOpInterface>(user);
+    auto loadB = dyn_cast<mlir::affine::AffineReadOpInterface>(user);
     if (!loadB || loadB == loadA)
       continue;
 
@@ -274,8 +283,8 @@ static void loadCSE(mlir::AffineReadOpInterface loadA,
   // Of the legal load candidates, use the one that dominates all others
   // to minimize the subsequent need to loadCSE
   Value loadB;
-  for (mlir::AffineReadOpInterface option : loadCandidates) {
-    if (llvm::all_of(loadCandidates, [&](mlir::AffineReadOpInterface depStore) {
+  for (mlir::affine::AffineReadOpInterface option : loadCandidates) {
+    if (llvm::all_of(loadCandidates, [&](mlir::affine::AffineReadOpInterface depStore) {
           return depStore == option ||
                  domInfo.dominates(option.getOperation(),
                                    depStore.getOperation());
@@ -328,9 +337,9 @@ static bool applyAffineStoreForward(func::FuncOp func) {
   SmallPtrSet<Value, 4> memrefsToErase;
 
   // Walk all load's and perform store to load forwarding.
-  func.walk([&](mlir::AffineReadOpInterface loadOp) {
+  func.walk([&](mlir::affine::AffineReadOpInterface loadOp) {
     auto currentLoadOp = loadOp;
-    auto newLoadOp = mlir::AffineReadOpInterface();
+    auto newLoadOp = mlir::affine::AffineReadOpInterface();
     while (1) {
       newLoadOp = forwardStoreToLoad(currentLoadOp, opsToErase, memrefsToErase,
                                      domInfo);
@@ -349,7 +358,7 @@ static bool applyAffineStoreForward(func::FuncOp func) {
   opsToErase.clear();
 
   // Walk all store's and perform unused store elimination
-  func.walk([&](mlir::AffineWriteOpInterface storeOp) {
+  func.walk([&](mlir::affine::AffineWriteOpInterface storeOp) {
     findUnusedStore(storeOp, opsToErase, memrefsToErase, postDomInfo);
   });
   // Erase all store op's which don't impact the program
@@ -368,7 +377,7 @@ static bool applyAffineStoreForward(func::FuncOp func) {
       // could still erase it if the call had no side-effects.
       continue;
     if (llvm::any_of(memref.getUsers(), [&](Operation *ownerOp) {
-          return !isa<mlir::AffineWriteOpInterface>(ownerOp) &&
+          return !isa<mlir::affine::AffineWriteOpInterface>(ownerOp) &&
                  !hasSingleEffect<MemoryEffects::Free>(ownerOp, memref);
         }))
       continue;
@@ -382,7 +391,7 @@ static bool applyAffineStoreForward(func::FuncOp func) {
 }
 
 namespace {
-struct AffineStoreForward : public AffineStoreForwardBase<AffineStoreForward> {
+struct AffineStoreForward : public scalehls::impl::AffineStoreForwardBase<AffineStoreForward> {
   void runOnOperation() override { applyAffineStoreForward(getOperation()); }
 };
 } // namespace

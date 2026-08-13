@@ -7,6 +7,14 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_LINALGFAKEQUANTIZE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 
@@ -68,19 +76,19 @@ namespace {
 /// This pass is only for testing use!!! To really support quantized model,
 /// first we need to have front-ends, such as Torch-MLIR, to support the model
 /// quantization, which has not came true unfortunately.
-struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
+struct LinalgFakeQuantize : public scalehls::impl::LinalgFakeQuantizeBase<LinalgFakeQuantize> {
   /// Get the quantized type from float scalar or tensor type.
   Type getQuantizeType(Type type) {
     auto integerType = IntegerType::get(type.getContext(), quanBits.getValue());
-    if (type.isa<FloatType>())
+    if (isa<FloatType>(type))
       return integerType;
-    if (type.isa<IntegerType, IndexType>())
+    if (isa<IntegerType, IndexType>(type))
       return type;
 
-    if (auto tensorType = type.dyn_cast<RankedTensorType>()) {
-      if (tensorType.getElementType().isa<FloatType>())
+    if (auto tensorType = dyn_cast<RankedTensorType>(type)) {
+      if (isa<FloatType>(tensorType.getElementType()))
         return RankedTensorType::get(tensorType.getShape(), integerType);
-      if (tensorType.getElementType().isa<IntegerType, IndexType>())
+      if (isa<IntegerType, IndexType>(tensorType.getElementType()))
         return type;
     }
     return Type();
@@ -92,7 +100,7 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
     SmallVector<ValueType, 64> values;
     for (unsigned i = 0; i < size; ++i)
       values.push_back(std::rand() % maxValue);
-    return DenseIntElementsAttr::get(quanType, values);
+    return DenseIntElementsAttr::get(cast<ShapedType>(quanType), values);
   }
 
   void runOnOperation() override {
@@ -128,8 +136,8 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
 
           // Convert tensor typed constant values. At this point, we have known
           // that the tensor has floating-point elements.
-          if (constant.getValue().getType().isa<RankedTensorType>()) {
-            auto denseAttr = constant.getValue().cast<DenseElementsAttr>();
+          if (isa<RankedTensorType>(constant.getValue().getType())) {
+            auto denseAttr = cast<DenseElementsAttr>(constant.getValue());
             DenseIntElementsAttr attr;
 
             switch (quanBits.getValue()) {
@@ -180,8 +188,8 @@ struct LinalgFakeQuantize : public LinalgFakeQuantizeBase<LinalgFakeQuantize> {
     patterns.add<ArithFloatToInt<arith::AddFOp, arith::AddIOp>>(context);
     patterns.add<ArithFloatToInt<arith::DivFOp, arith::DivUIOp>>(context);
     patterns.add<ArithFloatToInt<arith::ExtFOp, arith::ExtUIOp>>(context);
-    patterns.add<ArithFloatToInt<arith::MaxFOp, arith::MaxUIOp>>(context);
-    patterns.add<ArithFloatToInt<arith::MinFOp, arith::MinUIOp>>(context);
+    patterns.add<ArithFloatToInt<arith::MaximumFOp, arith::MaxUIOp>>(context);
+    patterns.add<ArithFloatToInt<arith::MinimumFOp, arith::MinUIOp>>(context);
     patterns.add<ArithFloatToInt<arith::MulFOp, arith::MulIOp>>(context);
     patterns.add<ArithFloatToInt<arith::RemFOp, arith::RemUIOp>>(context);
     patterns.add<ArithFloatToInt<arith::SubFOp, arith::SubIOp>>(context);

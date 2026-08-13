@@ -7,7 +7,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_LOOPPIPELINING
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -59,7 +68,7 @@ bool scalehls::applyLoopPipelining(AffineLoopBand &band, unsigned pipelineLoc,
 }
 
 namespace {
-struct LoopPipelining : public LoopPipeliningBase<LoopPipelining> {
+struct LoopPipelining : public scalehls::impl::LoopPipeliningBase<LoopPipelining> {
   void runOnOperation() override {
     // Collect all target loop bands.
     AffineLoopBands targetBands;

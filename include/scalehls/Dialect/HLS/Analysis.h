@@ -20,11 +20,11 @@ class ComplexityAnalysis {
 public:
   ComplexityAnalysis(func::FuncOp func);
 
-  Optional<unsigned long> getScheduleComplexity(ScheduleOp schedule) const;
-  Optional<unsigned long> getNodeComplexity(NodeOp node) const;
+  std::optional<unsigned long> getScheduleComplexity(ScheduleOp schedule) const;
+  std::optional<unsigned long> getNodeComplexity(NodeOp node) const;
 
 private:
-  Optional<unsigned long> calculateBlockComplexity(Block *block) const;
+  std::optional<unsigned long> calculateBlockComplexity(Block *block) const;
   llvm::SmallDenseMap<NodeOp, unsigned long> nodeComplexityMap;
 };
 

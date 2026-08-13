@@ -120,7 +120,7 @@ class DataflowBufferLike : public TraitBase<ConcreteType, DataflowBufferLike> {
 public:
   static LogicalResult verifyTrait(Operation *op) {
     if (op->getNumResults() != 1 ||
-        !op->getResult(0).getType().isa<StreamType, MemRefType>())
+        !isa<StreamType, MemRefType>(op->getResult(0).getType()))
       return failure();
     return success();
   }

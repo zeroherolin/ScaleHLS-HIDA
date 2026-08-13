@@ -7,12 +7,20 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CREATEAXIINTERFACE
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
 
 namespace {
-struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
+struct CreateAxiInterface : public scalehls::impl::CreateAxiInterfaceBase<CreateAxiInterface> {
   CreateAxiInterface() = default;
   CreateAxiInterface(std::string hlsTopFunc) { topFunc = hlsTopFunc; }
 
@@ -57,9 +65,9 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
         auto vectorize = cast<BufferVectorizeOp>(*buffer.user_begin());
         vectorize->remove();
         builder.insert(vectorize);
-        return vectorize.getResult();
+        return Value(vectorize.getResult());
       }
-      return buffer;
+      return Value(buffer);
     };
 
     // Move buffer arguments of the top function to the main function. Collect
@@ -68,9 +76,9 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
     SmallVector<Value, 32> buffers;
     SmallVector<Value, 32> funcPorts;
     for (auto arg : mainBlock->getArguments())
-      if (arg.getType().isa<MemRefType, StreamType>()) {
+      if (isa<MemRefType, StreamType>(arg.getType())) {
         buffers.push_back(getSelfOrVectorizedBuffer(arg));
-      } else if (arg.getType().isa<ShapedType>()) {
+      } else if (isa<ShapedType>(arg.getType())) {
         emitError(arg.getLoc(), "unsupported argument type");
         return signalPassFailure();
       } else {
@@ -92,10 +100,10 @@ struct CreateAxiInterface : public CreateAxiInterfaceBase<CreateAxiInterface> {
 
     // A helper to get AXI bundle type from a buffer.
     auto getBundleType = [&](Value buffer) {
-      if (auto memrefType = buffer.getType().dyn_cast<MemRefType>())
+      if (auto memrefType = dyn_cast<MemRefType>(buffer.getType()))
         return BundleType::get(context, memrefType.getElementType(),
                                AxiKind::MM);
-      if (auto streamType = buffer.getType().dyn_cast<StreamType>())
+      if (auto streamType = dyn_cast<StreamType>(buffer.getType()))
         return BundleType::get(context, streamType.getElementType(),
                                AxiKind::STREAM);
       llvm_unreachable("invalid buffer type");

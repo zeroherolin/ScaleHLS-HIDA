@@ -10,7 +10,16 @@
 #include "scalehls/Transforms/Passes.h"
 #include "scalehls/Transforms/Utils.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_CONVERTDATAFLOWTOFUNC
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
+using namespace mlir::affine;
 using namespace scalehls;
 using namespace hls;
 
@@ -158,7 +167,7 @@ struct InlineSchedule : public OpRewritePattern<ScheduleOp> {
         setFuncDirective(func, /*pipeline=*/false, /*targetInterval=*/1,
                          /*dataflow=*/true);
       else if (auto loop =
-                   dyn_cast<mlir::AffineForOp>(schedule->getParentOp())) {
+                   dyn_cast<mlir::affine::AffineForOp>(schedule->getParentOp())) {
         // If the schedule is located inside of a loop nest, try to coalesce
         // them into a flattened loop.
         AffineLoopBand band;
@@ -215,7 +224,7 @@ private:
 
 namespace {
 struct ConvertDataflowToFunc
-    : public ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
+    : public scalehls::impl::ConvertDataflowToFuncBase<ConvertDataflowToFunc> {
   ConvertDataflowToFunc() = default;
   explicit ConvertDataflowToFunc(bool argSplitExternalAccess) {
     splitExternalAccess = argSplitExternalAccess;

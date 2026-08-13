@@ -7,6 +7,14 @@
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 #include "scalehls/Transforms/Passes.h"
 
+namespace mlir {
+namespace scalehls {
+#define GEN_PASS_DEF_FUNCDUPLICATION
+#include "scalehls/Transforms/Passes.h.inc"
+} // namespace scalehls
+} // namespace mlir
+
+
 using namespace mlir;
 using namespace scalehls;
 using namespace hls;
@@ -63,7 +71,7 @@ struct SubViewSinkPattern : public OpRewritePattern<func::CallOp> {
 } // namespace
 
 namespace {
-struct FuncDuplication : public FuncDuplicationBase<FuncDuplication> {
+struct FuncDuplication : public scalehls::impl::FuncDuplicationBase<FuncDuplication> {
   void runOnOperation() override {
     auto module = getOperation();
     auto context = module.getContext();
