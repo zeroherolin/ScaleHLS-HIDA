@@ -99,14 +99,14 @@ struct AddIRaisePattern : public OpRewritePattern<arith::AddIOp> {
     }
 
     if (auto rhs = add.getRhs().getDefiningOp<arith::ConstantIndexOp>();
-        isValidDim(add.getLhs())) {
+        rhs && isValidDim(add.getLhs())) {
       r.replaceOpWithNewOp<mlir::AffineApplyOp>(
           add, r.getAffineDimExpr(0) + rhs.value(), add.getLhs());
       return success();
     }
 
     if (auto lhs = add.getLhs().getDefiningOp<arith::ConstantIndexOp>();
-        isValidDim(add.getRhs())) {
+        lhs && isValidDim(add.getRhs())) {
       r.replaceOpWithNewOp<mlir::AffineApplyOp>(
           add, lhs.value() + r.getAffineDimExpr(0), add.getRhs());
       return success();
@@ -126,14 +126,14 @@ struct MulIRaisePattern : public OpRewritePattern<arith::MulIOp> {
     r.setInsertionPoint(mul);
 
     if (auto rhs = mul.getRhs().getDefiningOp<arith::ConstantIndexOp>();
-        isValidDim(mul.getLhs())) {
+        rhs && isValidDim(mul.getLhs())) {
       r.replaceOpWithNewOp<mlir::AffineApplyOp>(
           mul, r.getAffineDimExpr(0) * rhs.value(), mul.getLhs());
       return success();
     }
 
     if (auto lhs = mul.getLhs().getDefiningOp<arith::ConstantIndexOp>();
-        isValidDim(mul.getRhs())) {
+        lhs && isValidDim(mul.getRhs())) {
       r.replaceOpWithNewOp<mlir::AffineApplyOp>(
           mul, lhs.value() * r.getAffineDimExpr(0), mul.getRhs());
       return success();
