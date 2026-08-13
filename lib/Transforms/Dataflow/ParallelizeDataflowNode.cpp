@@ -337,6 +337,23 @@ struct ParallelizeDataflowNode
         applyNaiveLoopUnroll(p.first, p.second);
     }
 
+    // Upstream unroll utilities (promoteIfSingleIteration in particular)
+    // create replacement constants at the function entry block, which
+    // violates the isolation of node/schedule regions. Localize them back
+    // to their uses, mirroring what LowerDataflow does.
+    OpBuilder builder(context);
+    SmallVector<Operation *, 16> constants;
+    for (auto &op : func.getBody().getOps())
+      if (isa<arith::ConstantOp>(&op))
+        constants.push_back(&op);
+    for (auto constant : constants) {
+      for (auto &use : llvm::make_early_inc_range(constant->getUses())) {
+        builder.setInsertionPoint(use.getOwner());
+        use.set(builder.clone(*constant)->getResult(0));
+      }
+      constant->erase();
+    }
+
     mlir::RewritePatternSet patterns(context);
     patterns.add<GenerateBufferLayout>(context);
     (void)applyPatternsAndFoldGreedily(func, std::move(patterns));
