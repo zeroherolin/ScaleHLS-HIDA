@@ -115,6 +115,8 @@ def CreateDataflowFromAffine :
 
 def CreateDataflowFromLinalg :
       Pass<"scalehls-create-dataflow-from-linalg", "func::FuncOp"> {
+  let dependentDialects = ["mlir::scalehls::hls::HLSDialect"];
+
   let summary = "Create dataflow hierarchy from linalg";
   let constructor = "mlir::scalehls::createCreateDataflowFromLinalgPass()";
 }
@@ -493,6 +495,20 @@ def CollapseMemrefUnitDims :
       Pass<"scalehls-collapse-memref-unit-dims", "func::FuncOp"> {
   let summary = "Collapse memref's unit dimensions";
   let constructor = "mlir::scalehls::createCollapseMemrefUnitDimsPass()";
+}
+
+def FoldAffineSubViewAccess :
+      Pass<"scalehls-fold-affine-subview-access", "func::FuncOp"> {
+  let dependentDialects = ["mlir::memref::MemRefDialect"];
+
+  let summary = "Fold affine accesses of subviews into their base buffers";
+  let description = [{
+    The upstream fold-memref-alias-ops pass no longer handles affine load
+    and store operations, while the HLS C++ emitter cannot express
+    subviews. This pass rewrites affine accesses of unit-stride subviews
+    into memref accesses of the underlying buffers.
+  }];
+  let constructor = "mlir::scalehls::createFoldAffineSubViewAccessPass()";
 }
 
 def CreateLocalBuffer : Pass<"scalehls-create-local-buffer", "func::FuncOp"> {

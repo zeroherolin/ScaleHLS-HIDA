@@ -175,11 +175,21 @@ void scalehls::registerHIDAPyTorchPipeline() {
         // bufferize passes were removed upstream).
         bufferization::OneShotBufferizePassOptions bufferizeOptions;
         bufferizeOptions.bufferizeFunctionBoundaries = true;
+        // Identity layouts: the later buffer placement assigns hls.mem
+        // spaces, which cannot be cast to strided layouts.
+        bufferizeOptions.functionBoundaryTypeConversion =
+            bufferization::LayoutMapOption::IdentityLayoutMap;
         // The HLS dataflow ops bufferize later (BufferizeDataflow).
         bufferizeOptions.allowUnknownOps = true;
         pm.addPass(
             bufferization::createOneShotBufferizePass(bufferizeOptions));
-        pm.addPass(bufferization::createBufferResultsToOutParamsPass());
+        // The HLS top function must use the out-param convention; since
+        // LLVM 22 public functions are skipped unless explicitly enabled.
+        bufferization::BufferResultsToOutParamsPassOptions outParamsOptions;
+        outParamsOptions.modifyPublicFunctions = true;
+        outParamsOptions.hoistStaticAllocs = true;
+        pm.addPass(bufferization::createBufferResultsToOutParamsPass(
+            outParamsOptions));
         pm.addPass(scalehls::createBufferizeDataflowPass());
         pm.addPass(mlir::createCanonicalizerPass());
 
@@ -306,6 +316,10 @@ void scalehls::registerHIDAPyTorchPipeline() {
         pm.addPass(scalehls::createLoopPipeliningPass());
         pm.addPass(scalehls::createArrayPartitionPass());
         pm.addPass(scalehls::createCreateHLSPrimitivePass());
+        // The HLS C++ emitter cannot express subviews; fold their accesses
+        // back into the base buffers before emission.
+        pm.addPass(memref::createFoldMemRefAliasOpsPass());
+        pm.addPass(scalehls::createFoldAffineSubViewAccessPass());
         pm.addPass(mlir::createCanonicalizerPass());
       });
 }

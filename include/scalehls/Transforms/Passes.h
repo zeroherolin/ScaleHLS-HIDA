@@ -92,6 +92,7 @@ std::unique_ptr<Pass> createRemoveVariableBoundPass();
 std::unique_ptr<Pass> createAffineStoreForwardPass();
 std::unique_ptr<Pass> createBufferVectorizePass();
 std::unique_ptr<Pass> createCollapseMemrefUnitDimsPass();
+std::unique_ptr<Pass> createFoldAffineSubViewAccessPass();
 std::unique_ptr<Pass>
 createCreateLocalBufferPass(bool externalBufferOnly = true,
                             bool registerOnly = false);

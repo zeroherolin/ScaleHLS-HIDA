@@ -64,6 +64,12 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
       (int64_t)kinds.size() != arrayType.getRank())
     return false;
 
+  // Partition layouts cannot be attached to subview results: the memref
+  // verifier requires their layout to be the strided form derived from
+  // the base buffer. The partition of the base buffer governs instead.
+  if (array.getDefiningOp<memref::SubViewOp>())
+    return false;
+
   LLVM_DEBUG(llvm::dbgs() << "\nApply array partition to " << array << " at "
                           << array.getLoc(););
   LLVM_DEBUG(llvm::dbgs() << "\nfactors: ";);
@@ -90,8 +96,27 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
       memorySpaceAttr ? cast<MemoryKindAttr>(memorySpaceAttr) : nullptr;
   if (actualDepth < threshold)
     kindAttr = MemoryKindAttr::get(array.getContext(), MemoryKind::LUTRAM_2P);
+
+  // A subview result must share the memory space of its base buffer
+  // (enforced by the memref verifier), so inherit it instead.
+  if (auto subview = array.getDefiningOp<memref::SubViewOp>()) {
+    auto baseType = cast<MemRefType>(subview.getSource().getType());
+    kindAttr = baseType.getMemorySpace()
+                   ? cast<MemoryKindAttr>(baseType.getMemorySpace())
+                   : nullptr;
+  }
   array.setType(MemRefType::get(
       arrayType.getShape(), arrayType.getElementType(), layoutAttr, kindAttr));
+
+  // Propagate the (possibly changed) memory space to subviews of this
+  // buffer to keep their types consistent.
+  for (auto user : array.getUsers())
+    if (auto subview = dyn_cast<memref::SubViewOp>(user)) {
+      auto resultType = cast<MemRefType>(subview.getType());
+      subview.getResult().setType(
+          MemRefType::get(resultType.getShape(), resultType.getElementType(),
+                          resultType.getLayout(), kindAttr));
+    }
 
   if (updateFuncSignature)
     if (auto func = array.getParentRegion()->getParentOfType<func::FuncOp>()) {
