@@ -223,6 +223,18 @@ SmallString<8> ScaleHLSEmitterBase::addAlias(Value val, Value alias) {
   return valName;
 }
 
+/// Formats a float with enough digits to round-trip exactly
+/// (std::to_string truncates to 6 decimals, destroying twiddle factors
+/// and small phase coefficients).
+template <typename FloatT>
+static std::string formatFloat(FloatT value, const char *format) {
+  if (!std::isfinite(value))
+    return value > 0 ? "INFINITY" : "-INFINITY";
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), format, value);
+  return buffer;
+}
+
 static SmallString<8> getConstantString(Type type, Attribute attr) {
   SmallString<8> string;
   if (type.isInteger(1)) {
@@ -238,15 +250,11 @@ static SmallString<8> getConstantString(Type type, Attribute attr) {
     if (floatType.getWidth() == 32) {
       string.append("(float)");
       auto value = cast<FloatAttr>(attr).getValue().convertToFloat();
-      string.append(std::isfinite(value)
-                        ? std::to_string(value)
-                        : (value > 0 ? "INFINITY" : "-INFINITY"));
+      string.append(formatFloat(value, "%.9g"));
     } else if (floatType.getWidth() == 64) {
       string.append("(double)");
       auto value = cast<FloatAttr>(attr).getValue().convertToDouble();
-      string.append(std::isfinite(value)
-                        ? std::to_string(value)
-                        : (value > 0 ? "INFINITY" : "-INFINITY"));
+      string.append(formatFloat(value, "%.17g"));
     }
   } else if (auto intType = dyn_cast<IntegerType>(type)) {
     std::string signedness = "";
