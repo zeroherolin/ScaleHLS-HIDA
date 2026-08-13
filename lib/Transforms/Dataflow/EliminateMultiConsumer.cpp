@@ -27,6 +27,7 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
   LogicalResult matchAndRewrite(NodeOp node,
                                 PatternRewriter &rewriter) const override {
     auto loc = rewriter.getUnknownLoc();
+    DominanceInfo domInfo;
 
     auto hasChanged = false;
     for (auto output : node.getOutputs()) {
@@ -35,7 +36,23 @@ struct InsertForkNode : public OpRewritePattern<NodeOp> {
       if (isExtBuffer(output))
         continue;
 
-      auto consumers = getDependentConsumers(output, node);
+      // A buffer may be reused as scratch storage by several producers in
+      // turn. Only consumers of the value written by THIS node - located
+      // after the node and before any subsequent redefinition - may be
+      // redirected to a fork; consumers of other generations must keep
+      // reading the original buffer.
+      auto producers = getProducersExcept(output, node);
+      SmallVector<NodeOp> consumers;
+      for (auto consumer : getDependentConsumers(output, node)) {
+        if (!domInfo.properlyDominates(node, consumer))
+          continue;
+        auto overwritten = llvm::any_of(producers, [&](NodeOp producer) {
+          return domInfo.properlyDominates(node, producer) &&
+                 domInfo.properlyDominates(producer, consumer);
+        });
+        if (!overwritten)
+          consumers.push_back(consumer);
+      }
       if (consumers.size() < 2)
         continue;
 
