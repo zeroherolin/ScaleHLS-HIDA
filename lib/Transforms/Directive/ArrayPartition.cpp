@@ -96,15 +96,6 @@ bool scalehls::applyArrayPartition(Value array, ArrayRef<unsigned> factors,
       memorySpaceAttr ? cast<MemoryKindAttr>(memorySpaceAttr) : nullptr;
   if (actualDepth < threshold)
     kindAttr = MemoryKindAttr::get(array.getContext(), MemoryKind::LUTRAM_2P);
-
-  // A subview result must share the memory space of its base buffer
-  // (enforced by the memref verifier), so inherit it instead.
-  if (auto subview = array.getDefiningOp<memref::SubViewOp>()) {
-    auto baseType = cast<MemRefType>(subview.getSource().getType());
-    kindAttr = baseType.getMemorySpace()
-                   ? cast<MemoryKindAttr>(baseType.getMemorySpace())
-                   : nullptr;
-  }
   array.setType(MemRefType::get(
       arrayType.getShape(), arrayType.getElementType(), layoutAttr, kindAttr));
 
