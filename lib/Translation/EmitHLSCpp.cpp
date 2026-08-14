@@ -2003,8 +2003,7 @@ void ModuleEmitter::emitFunction(func::FuncOp func) {
 
 /// Top-level MLIR module emitter.
 void ModuleEmitter::emitModule(ModuleOp module) {
-  os << R"XXX(
-//===------------------------------------------------------------*- C++ -*-===//
+  os << R"XXX(//===------------------------------------------------------------*- C++ -*-===//
 //
 // Automatically generated file for High-level Synthesis (HLS).
 //
